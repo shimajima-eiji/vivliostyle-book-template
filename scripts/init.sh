@@ -11,10 +11,10 @@ MONTH=$(date +%-m)
 
 find . -type f \( -name "*.md" -o -name "*.js" -o -name "*.css" \) | while read f; do
   sed -i '' \
-    "s|{{BOOK_TITLE}}|${BOOK_TITLE}|g" \
-    "s|{{AUTHOR}}|${AUTHOR}|g" \
-    "s|{{YEAR}}|${YEAR}|g" \
-    "s|{{MONTH}}|${MONTH}|g" \
+    -e "s|{{BOOK_TITLE}}|${BOOK_TITLE}|g" \
+    -e "s|{{AUTHOR}}|${AUTHOR}|g" \
+    -e "s|{{YEAR}}|${YEAR}|g" \
+    -e "s|{{MONTH}}|${MONTH}|g" \
     "$f"
 done
 
