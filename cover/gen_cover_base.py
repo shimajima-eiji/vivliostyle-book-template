@@ -65,6 +65,15 @@ def generate(
     author: str,
     font_size_title: int = 110,
     out_file: str = "cover/cover-book.png",
+    title_lines: list[str] | None = None,
+    subtitle_lines: list[str] | None = None,
+    title_top_ratio: float = 0.12,
+    title_gap: int = 20,
+    subtitle_top_ratio: float = 0.77,
+    subtitle_gap: int = 10,
+    font_size_sub: int = 48,
+    author_margin_right: int = 150,
+    author_bottom_margin: int = 150,
 ) -> None:
     """背景画像にテキストを合成して表紙画像を生成する。"""
     if os.path.exists(bg_path):
@@ -77,8 +86,11 @@ def generate(
     draw = ImageDraw.Draw(img)
 
     f_title = load_font(font_size_title)
-    f_sub   = load_font(48)
+    f_sub   = load_font(font_size_sub)
     f_auth  = load_font(45)
+
+    resolved_title_lines = title_lines or [line for line in (title_line1, title_line2) if line]
+    resolved_subtitle_lines = subtitle_lines or [line for line in (subtitle_line1, subtitle_line2) if line]
 
     def cx(text, font):
         return (W - draw.textbbox((0, 0), text, font=font)[2]) // 2
@@ -86,11 +98,19 @@ def generate(
     def rx(text, font, margin=150):
         return W - draw.textbbox((0, 0), text, font=font)[2] - margin
 
-    _draw_shadow(draw, title_line1, (cx(title_line1, f_title), int(H * 0.12)), f_title, (245, 245, 245))
-    _draw_shadow(draw, title_line2, (cx(title_line2, f_title), int(H * 0.12) + font_size_title + 20), f_title, (245, 245, 245))
-    _draw_shadow(draw, subtitle_line1, (cx(subtitle_line1, f_sub), int(H * 0.77)), f_sub, (230, 230, 230))
-    _draw_shadow(draw, subtitle_line2, (cx(subtitle_line2, f_sub), int(H * 0.815)), f_sub, (230, 230, 230))
-    _draw_shadow(draw, author, (rx(author, f_auth), H - 150), f_auth, (230, 230, 230))
+    y = int(H * title_top_ratio)
+    for line in resolved_title_lines:
+        _draw_shadow(draw, line, (cx(line, f_title), y), f_title, (245, 245, 245))
+        bbox = draw.textbbox((0, 0), line, font=f_title)
+        y += (bbox[3] - bbox[1]) + title_gap
+
+    y = int(H * subtitle_top_ratio)
+    for line in resolved_subtitle_lines:
+        _draw_shadow(draw, line, (cx(line, f_sub), y), f_sub, (230, 230, 230))
+        bbox = draw.textbbox((0, 0), line, font=f_sub)
+        y += (bbox[3] - bbox[1]) + subtitle_gap
+
+    _draw_shadow(draw, author, (rx(author, f_auth, margin=author_margin_right), H - author_bottom_margin), f_auth, (230, 230, 230))
 
     img.convert("RGB").save(out_file, "PNG")
     print(f"生成: {out_file}")

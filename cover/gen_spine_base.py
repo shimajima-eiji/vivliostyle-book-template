@@ -42,10 +42,11 @@ def generate_spine(
     spine_width_mm: float,
     out_file: str,
     base_color: tuple = (26, 26, 27, 255),
-    line_colors: list = None
+    line_colors: list = None,
+    prefer_base_color: bool = False,
 ):
     W = int(spine_width_mm * 8.352) # 1754 / 210 = 8.352 px/mm
-    if os.path.exists(bg_path):
+    if os.path.exists(bg_path) and not prefer_base_color:
         src = Image.open(bg_path).convert("RGBA")
         c = src.width // 2
         crop_w = int(src.width * 0.05) if src.width > 200 else src.width
