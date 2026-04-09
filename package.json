@@ -1,0 +1,12 @@
+{
+  "name": "vivliostyle-book-template",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Markdownで原稿を書き、VivliostyleでPDFに変換する同人誌制作テンプレート",
+  "scripts": {
+    "build": "vivliostyle build"
+  },
+  "devDependencies": {
+    "@vivliostyle/cli": "^10.4.0"
+  }
+}

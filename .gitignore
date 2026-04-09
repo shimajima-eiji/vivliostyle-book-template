@@ -2,3 +2,4 @@ dist/*.pdf
 .vivliostyle/
 cover/*.pdf
 theme/book.css
+node_modules/
