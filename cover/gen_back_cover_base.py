@@ -1,28 +1,27 @@
 """
 書籍裏表紙生成ベースモジュール（book-template 共通）
-商業同人誌向けプロフェッショナルデザイン
+説明テキストを置かず、色面と余白だけで本の人格を閉じるためのミニマルな描画ロジック。
 """
 
 import os
 import platform
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps, ImageFilter
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 W, H = 1240, 1754
 
-def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
-    """Windows / macOS 両対応フォント取得。"""
+
+def load_font(size: int) -> ImageFont.FreeTypeFont:
     if platform.system() == "Windows":
         candidates = [
-            "C:\\Windows\\Fonts\\meiryob.ttc" if bold else "C:\\Windows\\Fonts\\meiryo.ttc",
-            "C:\\Windows\\Fonts\\yumin.ttf",
-            "C:\\Windows\\Fonts\\msmincho.ttc",
+            "C:\\Windows\\Fonts\\meiryo.ttc",
+            "C:\\Windows\\Fonts\\consola.ttf",
         ]
     else:
         candidates = [
-            "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc" if bold
-            else "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
-            "/System/Library/Fonts/ヒラギノ明朝 ProN W3.ttc",
+            "/System/Library/Fonts/HelveticaNeue.ttc",
+            "/System/Library/Fonts/Optima.ttc",
+            "/System/Library/Fonts/ヒラギノ角ゴシック W3.ttc",
         ]
     for path in candidates:
         if os.path.exists(path):
@@ -32,62 +31,124 @@ def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
                 continue
     return ImageFont.load_default()
 
-def draw_dummy_qr(draw: ImageDraw.Draw, x: int, y: int, size: int):
-    """シンプルなQRコードプレースホルダーを描画"""
-    draw.rectangle([x, y, x + size, y + size], fill="white", outline=(200, 200, 200), width=2)
-    margin = 15
-    draw.rectangle([x+margin, y+margin, x+margin+30, y+margin+30], fill=(40, 40, 40))
-    draw.rectangle([x+size-margin-30, y+margin, x+size-margin, y+margin+30], fill=(40, 40, 40))
-    draw.rectangle([x+margin, y+size-margin-30, x+margin+30, y+size-margin], fill=(40, 40, 40))
-    f_small = load_font(20, bold=True)
-    draw.text((x + size/2 - 45, y + size/2 - 10), "QR CODE", fill=(120, 120, 120), font=f_small)
 
-def generate(
-    bg_path: str,
-    catchphrase_lines: list[str],
-    accent_color: tuple = (70, 130, 250, 255),
-    url_text: str = "https://nomuraya.com",
-    out_file: str = "cover/back-book.png",
-) -> None:
-    # 完全に一律ではなく、各書籍の表紙背景画像を取り込む
+def _to_rgba(color, alpha=None):
+    if len(color) == 4:
+        rgba = color
+    else:
+        rgba = (*color, 255)
+    if alpha is None:
+        return rgba
+    return (rgba[0], rgba[1], rgba[2], alpha)
+
+
+def _lerp(a: int, b: int, t: float) -> int:
+    return round(a + (b - a) * t)
+
+
+def _make_gradient(start_color, end_color):
+    start = _to_rgba(start_color)
+    end = _to_rgba(end_color)
+    img = Image.new("RGBA", (W, H))
+    draw = ImageDraw.Draw(img)
+    for y in range(H):
+        t = y / (H - 1)
+        color = tuple(_lerp(start[i], end[i], t) for i in range(4))
+        draw.line([(0, y), (W, y)], fill=color)
+    return img
+
+
+def _apply_rectangle(img, spec):
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    draw.rectangle(spec["box"], fill=_to_rgba(spec["fill"]))
+    blur = spec.get("blur", 0)
+    if blur:
+        layer = layer.filter(ImageFilter.GaussianBlur(blur))
+    return Image.alpha_composite(img, layer)
+
+
+def _apply_glow(img, spec):
+    layer = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    cx, cy = spec["center"]
+    radius = spec["radius"]
+    box = (cx - radius, cy - radius, cx + radius, cy + radius)
+    draw.ellipse(box, fill=_to_rgba(spec["fill"]))
+    blur = spec.get("blur", max(radius // 2, 1))
+    layer = layer.filter(ImageFilter.GaussianBlur(blur))
+    return Image.alpha_composite(img, layer)
+
+
+def _apply_line(draw, spec):
+    draw.line(spec["xy"], fill=_to_rgba(spec["fill"]), width=spec.get("width", 1))
+
+
+def _apply_signature(draw, spec):
+    text = spec["text"]
+    font = load_font(spec.get("size", 24))
+    margin_x = spec.get("margin_x", 64)
+    margin_y = spec.get("margin_y", 64)
+    fill = _to_rgba(spec.get("fill", (255, 255, 255, 80)))
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw = bbox[2] - bbox[0]
+    th = bbox[3] - bbox[1]
+    align = spec.get("align", "left")
+    x = margin_x if align == "left" else W - tw - margin_x
+    y = H - th - margin_y
+    draw.text((x, y), text, font=font, fill=fill)
+
+
+def _legacy_back_cover(bg_path: str, english_title: str):
     if os.path.exists(bg_path):
         src = Image.open(bg_path).convert("RGBA")
         img = ImageOps.fit(src, (W, H), Image.Resampling.LANCZOS)
-        # 表紙ほど華美にせずテキストの視認性を確保するため、全体をぼかしてダークレイヤーを重ねる
-        img = img.filter(ImageFilter.GaussianBlur(15))
-        overlay = Image.new("RGBA", (W, H), (20, 20, 25, 210)) # 黒を強めに透過で重ねる
+        img = ImageOps.mirror(img)
+        img = img.filter(ImageFilter.GaussianBlur(30))
+        overlay = Image.new("RGBA", (W, H), (15, 15, 18, 200))
         img = Image.alpha_composite(img, overlay)
     else:
-        # 背景がない場合のフォールバック
-        img = Image.new("RGBA", (W, H), (28, 28, 30, 255))
+        img = Image.new("RGBA", (W, H), (30, 30, 32, 255))
 
     draw = ImageDraw.Draw(img)
-    text_color = (245, 245, 245, 255)
+    f_center = load_font(45)
+    f_bottom = load_font(30)
 
-    f_catch = load_font(60, bold=True)
-    f_info = load_font(32, bold=False)
-    f_logo = load_font(40, bold=True)
+    bbox = draw.textbbox((0, 0), english_title, font=f_center)
+    tw = bbox[2] - bbox[0]
+    draw.text(((W - tw) / 2, H // 2 - 40), english_title, font=f_center, fill=(230, 230, 230, 255))
 
-    # 1. キャッチフレーズ
-    start_y = int(H * 0.38)
-    for i, line in enumerate(catchphrase_lines):
-        x = int(W * 0.15)
-        y = start_y + i * (60 + 40)
-        draw.text((x, y), line, font=f_catch, fill=text_color)
-        
-    # 書籍ごとに異なるアクセントカラーのライン
-    line_h = len(catchphrase_lines) * 100 - 40
-    draw.rectangle([int(W * 0.15) - 35, start_y + 5, int(W * 0.15) - 20, start_y + line_h], fill=accent_color)
+    pub_text = "Published by nomuraya   |   nomuraya.com"
+    pbox = draw.textbbox((0, 0), pub_text, font=f_bottom)
+    pw = pbox[2] - pbox[0]
+    draw.text(((W - pw) / 2, H - 150), pub_text, font=f_bottom, fill=(120, 120, 120, 255))
+    return img
 
-    # 2. サークル情報（左下）
-    info_y = H - 300
-    draw.text((int(W * 0.15), info_y), "Published by nomuraya", font=f_logo, fill=text_color)
-    draw.text((int(W * 0.15), info_y + 60), url_text, font=f_info, fill=(160, 160, 160, 255))
 
-    # 3. QRコードプレースホルダー（右下）
-    qr_size = 180
-    qr_x = W - int(W * 0.15) - qr_size
-    draw_dummy_qr(draw, qr_x, H - 325, qr_size)
+def generate(
+    bg_path: str = "",
+    english_title: str = "",
+    out_file: str = "cover/back-book.png",
+    style: dict | None = None,
+) -> None:
+    if style is None:
+        img = _legacy_back_cover(bg_path, english_title)
+    else:
+        background = style.get("background", {})
+        start_color = background.get("top", background.get("color", (24, 24, 26, 255)))
+        end_color = background.get("bottom", start_color)
+        img = _make_gradient(start_color, end_color)
+
+        for rect in style.get("rectangles", []):
+            img = _apply_rectangle(img, rect)
+        for glow in style.get("glows", []):
+            img = _apply_glow(img, glow)
+
+        draw = ImageDraw.Draw(img)
+        for line in style.get("lines", []):
+            _apply_line(draw, line)
+        if style.get("signature"):
+            _apply_signature(draw, style["signature"])
 
     img.convert("RGB").save(out_file, "PNG")
-    print(f"生成（表紙連動プロ版）: {out_file}")
+    print(f"Back cover generated: {out_file}")
