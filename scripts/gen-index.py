@@ -166,3 +166,53 @@ OUTPUT.write_text("\n".join(lines) + "\n", encoding="utf-8")
 print(f"生成完了: {OUTPUT}  ({total}エントリ、{len(chapter_texts)}章)")
 if zero_hit:
     print(f"ヒットなし: {', '.join(zero_hit)}")
+
+# ── 未登録候補の提案 ──────────────────────────────────────────
+# 本文頻出語のうち index-terms.yaml に未登録のものを出力する。
+# 索引の漏れ検出と品質向上のために使う。
+
+from collections import Counter
+
+# 登録済み用語セット（term と patterns の両方）
+registered: set[str] = set()
+for entry in terms_data:
+    registered.add(entry.get("term", ""))
+    for p in entry.get("patterns", []):
+        registered.add(p)
+
+# 全章テキストを結合してノイズを除去
+combined = "\n".join(chapter_texts.values())
+# コードスパン・コードブロックを除去（記法を誤検出しない）
+combined = re.sub(r"```[\s\S]*?```", "", combined)
+combined = re.sub(r"`[^`\n]+`", "", combined)
+# Markdown記法行（見出し・表・画像・リンク）を除去
+combined = re.sub(r"^#{1,6}[^\n]*$", "", combined, flags=re.MULTILINE)
+combined = re.sub(r"^\|[^\n]*$", "", combined, flags=re.MULTILINE)
+combined = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", combined)
+
+# 英数字語（2文字以上）とカタカナ語（3文字以上）を抽出
+candidates = re.findall(r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z]+)*|[ァ-ヶー]{3,}", combined)
+counter = Counter(candidates)
+
+# 未登録・3回以上・ノイズ除外
+NOISE = {
+    # Markdownの残滓・一般的すぎる語
+    "md", "png", "pdf", "css", "js", "sh", "py", "yaml", "txt",
+    "true", "false", "null", "None", "EOF",
+    "the", "and", "or", "for", "with", "from", "import", "return",
+    "path", "file", "str", "int", "list", "dict", "set",
+    "assets", "scripts", "chapter", "image", "main",
+}
+suggestions = [
+    (term, count)
+    for term, count in counter.most_common(50)
+    if term not in registered
+    and term.lower() not in NOISE
+    and count >= 3
+    and len(term) >= 2
+]
+
+if suggestions:
+    print(f"\n📋 索引未登録の頻出語（index-terms.yaml への追加を検討）:")
+    for term, count in suggestions:
+        print(f"   {count}回: {term}")
