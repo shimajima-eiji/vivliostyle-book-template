@@ -21,7 +21,7 @@ done
 
 # book-engine のセットアップ（失敗しても初期化は完了扱い）
 BOOK_ENGINE_DIR="$(dirname "$(pwd)")/book-engine"
-BOOK_ENGINE_URL="https://github.com/nomuraya/book-engine.git"
+BOOK_ENGINE_URL="https://github.com/shimajima-eiji/book-engine.git"
 
 echo ""
 echo "--- book-engine セットアップ ---"
