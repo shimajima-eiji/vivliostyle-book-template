@@ -13,7 +13,7 @@ FINAL_PDF  := dist/book-digital-with-cover.pdf
 # book-engine スクリプトの絶対パス（include 時点で確定する）
 _ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
-.PHONY: all build css index chapters cover-img vivliostyle cover clean help
+.PHONY: all build css index chapters cover-img vivliostyle cover validate clean help
 
 all: build
 
@@ -59,6 +59,11 @@ cover: $(BOOK_PDF)
 		echo "⚠️  カバー画像なし（$(COVER_PNG)）。$(FINAL_PDF) = 本文のみ"; \
 	fi
 
+## ビルド成果物を検証（ページ数・索引品質）
+validate:
+	@echo "🔍 品質チェック中..."
+	@BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/validate.py
+
 ## 中間ファイルを削除
 clean:
 	rm -f $(COVER_PDF) theme/book.css
@@ -74,3 +79,4 @@ help:
 	@echo "  make chapters  # 章扉画像を再生成"
 	@echo "  make cover-img # 表紙画像を再生成"
 	@echo "  make vivliostyle # 組版のみ"
+	@echo "  make validate  # ビルド成果物の品質チェック"
