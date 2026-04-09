@@ -25,6 +25,20 @@ dist/
   book-digital-with-cover.pdf 表紙込みPDF（配布用）
 ```
 
+## 表紙アセット運用
+
+- `cover/` 直下には正本と生成スクリプトだけ置く
+- 候補は `cover/_candidates/`
+- 人手で補正した採用元は `cover/_fixed/`
+- 現在採用している fix 入力は `cover/fix-ledger.md` に記録する
+- 一時物は `cover/_work/` に置き、`incoming` `scratch` `compare` `preview` を使い分ける
+- `_work` 直下にファイルを直置きしない
+- 複数書籍で使うツールは `book-template/tools/` に置く
+- 横断の完全一時物は `/tmp/nomuraya-books/` を使う
+- オーガニゼーション直下に `tmp/` や `tmp-*` を増やさない
+
+詳細は `../.github-private/org-root/build-and-asset-guide.md` を参照。
+
 ## ビルドコマンド
 
 ```bash

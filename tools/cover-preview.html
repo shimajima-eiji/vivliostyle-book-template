@@ -1,0 +1,457 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Book Cover Preview</title>
+    <style>
+      :root {
+        --bg: #ece8e1;
+        --panel: rgba(255, 255, 255, 0.86);
+        --panel-strong: rgba(255, 255, 255, 0.94);
+        --line: rgba(34, 34, 34, 0.12);
+        --text: #2f2d2a;
+        --muted: #6c6861;
+        --shadow: 0 24px 60px rgba(0, 0, 0, 0.14);
+        --radius: 22px;
+        --preview-width: min(1100px, 92vw);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 255, 255, 0.72), transparent 28%),
+          linear-gradient(180deg, #f2eee8 0%, #e8e3dc 100%);
+      }
+
+      main {
+        width: min(1320px, calc(100vw - 32px));
+        margin: 24px auto 48px;
+        display: grid;
+        grid-template-columns: 320px minmax(0, 1fr);
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .controls {
+        padding: 22px 20px;
+        position: sticky;
+        top: 20px;
+        align-self: start;
+      }
+
+      h1 {
+        margin: 0 0 8px;
+        font-size: 1.45rem;
+        letter-spacing: 0.02em;
+      }
+
+      .lede {
+        margin: 0 0 20px;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: var(--muted);
+      }
+
+      form {
+        display: grid;
+        gap: 14px;
+      }
+
+      label {
+        display: grid;
+        gap: 7px;
+        font-size: 0.92rem;
+        color: var(--muted);
+      }
+
+      select,
+      input[type="range"],
+      button {
+        width: 100%;
+      }
+
+      select,
+      button {
+        appearance: none;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel-strong);
+        color: var(--text);
+        padding: 12px 14px;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+        transition: transform 120ms ease, box-shadow 120ms ease;
+      }
+
+      button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.12);
+      }
+
+      .toggle-row {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .checkbox {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        color: var(--text);
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: var(--panel-strong);
+      }
+
+      .checkbox input {
+        width: 16px;
+        height: 16px;
+      }
+
+      .meta {
+        margin-top: 18px;
+        padding-top: 18px;
+        border-top: 1px solid var(--line);
+        font-size: 0.86rem;
+        line-height: 1.7;
+        color: var(--muted);
+      }
+
+      .stage {
+        padding: 18px;
+        display: grid;
+        gap: 18px;
+      }
+
+      .hero {
+        padding: 22px;
+        background:
+          radial-gradient(circle at top center, rgba(255, 255, 255, 0.72), transparent 30%),
+          linear-gradient(180deg, rgba(249, 247, 244, 0.9), rgba(236, 232, 225, 0.82));
+        border: 1px solid rgba(34, 34, 34, 0.08);
+        border-radius: 20px;
+        min-height: 420px;
+        display: grid;
+        place-items: center;
+      }
+
+      .hero img {
+        display: block;
+        width: 100%;
+        max-width: var(--preview-width);
+        height: auto;
+        border-radius: 14px;
+        box-shadow: 0 28px 72px rgba(0, 0, 0, 0.18);
+        background: rgba(255, 255, 255, 0.8);
+      }
+
+      .thumbs {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+      }
+
+      .thumb {
+        padding: 12px;
+        border-radius: 18px;
+        border: 1px solid rgba(34, 34, 34, 0.08);
+        background: rgba(255, 255, 255, 0.65);
+        display: grid;
+        gap: 8px;
+        cursor: pointer;
+        transition: transform 120ms ease, border-color 120ms ease, background 120ms ease;
+      }
+
+      .thumb:hover {
+        transform: translateY(-2px);
+      }
+
+      .thumb.active {
+        border-color: rgba(34, 34, 34, 0.24);
+        background: rgba(255, 255, 255, 0.92);
+      }
+
+      .thumb strong {
+        font-size: 0.92rem;
+      }
+
+      .thumb img {
+        width: 100%;
+        height: 190px;
+        object-fit: contain;
+        border-radius: 10px;
+        background: linear-gradient(180deg, #f7f4ef, #ece7df);
+      }
+
+      .links {
+        display: grid;
+        gap: 10px;
+        padding: 18px;
+        border: 1px solid rgba(34, 34, 34, 0.08);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.7);
+      }
+
+      .links strong {
+        font-size: 0.95rem;
+      }
+
+      .links a {
+        color: #3b4e66;
+        text-decoration: none;
+        word-break: break-all;
+      }
+
+      .links a:hover {
+        text-decoration: underline;
+      }
+
+      @media (max-width: 980px) {
+        main {
+          grid-template-columns: 1fr;
+        }
+
+        .controls {
+          position: static;
+        }
+
+        .thumbs {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <aside class="panel controls">
+        <h1>装丁プレビュー</h1>
+        <p class="lede">
+          一時的な確認用ページです。生成後にこのページを開き直すか、「画像を再読込」を押すと、最新のPNGを見直せます。
+        </p>
+
+        <form id="previewForm">
+          <label>
+            書籍
+            <select id="bookSelect" name="book"></select>
+          </label>
+
+          <label>
+            メイン表示
+            <select id="focusSelect" name="focus">
+              <option value="wrap">全面</option>
+              <option value="guide">印刷ガイド</option>
+              <option value="spread">印刷スプレッド</option>
+              <option value="front">表紙</option>
+              <option value="spine">背表紙</option>
+              <option value="back">裏表紙</option>
+            </select>
+          </label>
+
+          <label>
+            拡大率
+            <input id="scaleRange" type="range" min="55" max="100" step="1" value="88">
+          </label>
+
+          <div class="toggle-row">
+            <label class="checkbox">
+              <input id="showThumbs" type="checkbox" checked>
+              サムネイル表示
+            </label>
+            <label class="checkbox">
+              <input id="showLinks" type="checkbox" checked>
+              パス表示
+            </label>
+          </div>
+
+          <button id="reloadButton" type="button">画像を再読込</button>
+        </form>
+
+        <div class="meta">
+          置き場所:
+          <br>
+          <code>book-template/tools/cover-preview.html</code>
+          <br><br>
+          想定:
+          <br>
+          <code>cover-book.png</code>
+          <br>
+          <code>spine-book.png</code>
+          <br>
+          <code>back-book.png</code>
+          <br>
+          <code>wrap-preview.png</code>
+          <br>
+          <code>print/spread-guide.png</code>
+          <br>
+          <code>print/spread-bleed-300dpi.png</code>
+        </div>
+      </aside>
+
+      <section class="panel stage">
+        <div class="hero">
+          <img id="mainImage" alt="cover preview">
+        </div>
+
+        <section id="thumbSection" class="thumbs"></section>
+        <section id="linkSection" class="links"></section>
+      </section>
+    </main>
+
+    <script>
+      const books = {
+        teaching: {
+          label: "非エンジニアにAIを教える技術",
+          files: {
+            wrap: "../../teaching-ai-to-non-engineers/cover/wrap-preview.png",
+            guide: "../../teaching-ai-to-non-engineers/cover/print/spread-guide.png",
+            spread: "../../teaching-ai-to-non-engineers/cover/print/spread-bleed-300dpi.png",
+            front: "../../teaching-ai-to-non-engineers/cover/cover-book.png",
+            spine: "../../teaching-ai-to-non-engineers/cover/spine-book.png",
+            back: "../../teaching-ai-to-non-engineers/cover/back-book.png",
+          },
+        },
+        writing: {
+          label: "自分にしか書けないことをAIに書かせる",
+          files: {
+            wrap: "../../ai-writing-guide/cover/wrap-preview.png",
+            guide: "../../ai-writing-guide/cover/print/spread-guide.png",
+            spread: "../../ai-writing-guide/cover/print/spread-bleed-300dpi.png",
+            front: "../../ai-writing-guide/cover/cover-book.png",
+            spine: "../../ai-writing-guide/cover/spine-book.png",
+            back: "../../ai-writing-guide/cover/back-book.png",
+          },
+        },
+        contract: {
+          label: "業務委託で損しない実務大全",
+          files: {
+            wrap: "../../freelance-contract-os/cover/wrap-preview.png",
+            guide: "../../freelance-contract-os/cover/print/spread-guide.png",
+            spread: "../../freelance-contract-os/cover/print/spread-bleed-300dpi.png",
+            front: "../../freelance-contract-os/cover/cover-book.png",
+            spine: "../../freelance-contract-os/cover/spine-book.png",
+            back: "../../freelance-contract-os/cover/back-book.png",
+          },
+        },
+      };
+
+      const labels = {
+        wrap: "全面",
+        guide: "印刷ガイド",
+        spread: "印刷スプレッド",
+        front: "表紙",
+        spine: "背表紙",
+        back: "裏表紙",
+      };
+
+      const bookSelect = document.querySelector("#bookSelect");
+      const focusSelect = document.querySelector("#focusSelect");
+      const scaleRange = document.querySelector("#scaleRange");
+      const showThumbs = document.querySelector("#showThumbs");
+      const showLinks = document.querySelector("#showLinks");
+      const reloadButton = document.querySelector("#reloadButton");
+      const mainImage = document.querySelector("#mainImage");
+      const thumbSection = document.querySelector("#thumbSection");
+      const linkSection = document.querySelector("#linkSection");
+
+      let cacheToken = Date.now();
+
+      function withCacheBust(path) {
+        return `${path}?v=${cacheToken}`;
+      }
+
+      function currentBook() {
+        return books[bookSelect.value];
+      }
+
+      function renderBookOptions() {
+        for (const [key, book] of Object.entries(books)) {
+          const option = document.createElement("option");
+          option.value = key;
+          option.textContent = book.label;
+          bookSelect.append(option);
+        }
+      }
+
+      function renderMain() {
+        const book = currentBook();
+        const focus = focusSelect.value;
+        mainImage.src = withCacheBust(book.files[focus]);
+        mainImage.alt = `${book.label} ${labels[focus]}`;
+        document.title = `${book.label} Preview`;
+        document.documentElement.style.setProperty("--preview-width", `${scaleRange.value}%`);
+      }
+
+      function renderThumbs() {
+        const book = currentBook();
+        thumbSection.innerHTML = "";
+        thumbSection.hidden = !showThumbs.checked;
+
+        for (const key of ["wrap", "guide", "spread", "back", "spine", "front"]) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = `thumb${focusSelect.value === key ? " active" : ""}`;
+          button.innerHTML = `
+            <strong>${labels[key]}</strong>
+            <img alt="${book.label} ${labels[key]}" src="${withCacheBust(book.files[key])}">
+          `;
+          button.addEventListener("click", () => {
+            focusSelect.value = key;
+            render();
+          });
+          thumbSection.append(button);
+        }
+      }
+
+      function renderLinks() {
+        const book = currentBook();
+        linkSection.hidden = !showLinks.checked;
+        linkSection.innerHTML = `
+          <strong>現在のファイル</strong>
+          ${Object.entries(book.files)
+            .map(([key, path]) => `<a href="${path}" target="_blank" rel="noreferrer">${labels[key]}: ${path}</a>`)
+            .join("")}
+        `;
+      }
+
+      function render() {
+        renderMain();
+        renderThumbs();
+        renderLinks();
+      }
+
+      renderBookOptions();
+      bookSelect.value = Object.keys(books)[0];
+      render();
+
+      bookSelect.addEventListener("change", render);
+      focusSelect.addEventListener("change", render);
+      scaleRange.addEventListener("input", renderMain);
+      showThumbs.addEventListener("change", renderThumbs);
+      showLinks.addEventListener("change", renderLinks);
+      reloadButton.addEventListener("click", () => {
+        cacheToken = Date.now();
+        render();
+      });
+    </script>
+  </body>
+</html>

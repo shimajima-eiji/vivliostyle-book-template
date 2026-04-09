@@ -92,6 +92,32 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent / "book-template" / "
 from gen_cover_base import generate
 ```
 
+## 表紙アセットの置き場ルール
+
+表紙まわりは「採用版」「候補」「補正版」「一時物」を混ぜない。
+
+```text
+cover/_work/    その書籍の一時ワークスペース
+  incoming/     受領直後の一時置き場
+  scratch/      中間変換・試作
+  compare/      比較画像
+  preview/      repo専用の確認物
+cover/_candidates/  外部ツールや生成候補。git管理する
+cover/_fixed/   補正版・採用元マスター。git管理する
+cover/fix-ledger.md  採用中のfix入力と生成経路の台帳
+cover/          ビルドが参照する正本だけ置く
+cover/print/    印刷用の生成物
+book-template/tools/  複数書籍で使う確認ツール
+/tmp/nomuraya-books/  完全に使い捨ての横断比較物
+```
+
+- `cover/cover-book.png` `cover/back-book.png` `cover/spine-book.png` が正本
+- `cover/fix-ledger.md` に「今どの fix 入力を採用しているか」を書く
+- `copy` `final2` のような曖昧名を作らない
+- `_work` 直下にファイルを直置きしない
+- オーガニゼーション直下に `tmp/` や `tmp-*` を作らない
+- 詳細運用は [`.github-private/org-root/build-and-asset-guide.md`](../.github-private/org-root/build-and-asset-guide.md) を参照
+
 ## ライセンス
 
 MIT
