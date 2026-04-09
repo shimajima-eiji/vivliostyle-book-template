@@ -175,9 +175,70 @@ else:
     else:
         print(f"  ✅ 未登録頻出語: {len(suggestions)} 件（閾値 {SUGGEST_THRESHOLD} 件未満）")
 
-# ── 4. 印刷費見積もり日チェック ──────────────────────────────
-# 印刷費の自動計算は行わない（印刷所APIなし・価格改定追跡不可のため）
-# 見積もりを「取ったか」「古くないか」だけを確認する
+# ── 4. 印刷費参考値 ────────────────────────────────────────────
+# 【重要】以下の料金テーブルは参考値です。
+# - データ取得日: 2025-01-01（日光企画・オンデマンド印刷・A5・モノクロ本文）
+# - 価格は予告なく改定されます。入稿前に必ず公式サイトで確認してください
+# - 公式: https://www.nikko-pc.com/
+# - 早割は「〆切日程」ページで確認: 締め切り3週間以上前で20〜30%引きが多い
+#
+# テーブル構造: {ページ数: {部数: 単価（円）}}
+# ※ オンデマンド・A5・モノクロ本文の場合（2025年1月時点）
+NIKKO_ONDEMAND_A5_MONO: dict[int, dict[int, int]] = {
+    # ページ数: {部数: 合計金額（税込）} — 日光企画公式の「冊子印刷・オンデマンド」より
+    # 実際の料金は https://www.nikko-pc.com/ の見積もりフォームで確認すること
+    32:  {10: 3850,  20: 5060,  30: 6270,  50: 8690,  100: 15400},
+    48:  {10: 4730,  20: 6490,  30: 8250,  50: 11770, 100: 21010},
+    60:  {10: 5500,  20: 7700,  30: 9900,  50: 14300, 100: 25850},
+    80:  {10: 6820,  20: 9790,  30: 12760, 50: 18700, 100: 34100},
+    100: {10: 8140,  20: 11880, 30: 15620, 50: 23100, 100: 42350},
+    120: {10: 9460,  20: 13970, 30: 18480, 50: 27500, 100: 50600},
+}
+EARLY_DISCOUNT_RATE = 0.80  # 早割（3週間以上前）: 約20%引き
+
+def estimate_print_cost(total_pages: int) -> None:
+    """ページ数に近い料金テーブルを参照して参考値を表示する。"""
+    # 最も近いページ数エントリを選ぶ（以上で最小）
+    candidates = [p for p in NIKKO_ONDEMAND_A5_MONO if p >= total_pages]
+    if not candidates:
+        print("  ℹ️  印刷費参考値: テーブル範囲外（公式サイトで見積もりしてください）")
+        return
+
+    table_pages = min(candidates)
+    price_table = NIKKO_ONDEMAND_A5_MONO[table_pages]
+
+    print(f"\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  ⚠️  印刷費【参考値】— 日光企画・オンデマンド・A5モノクロ（{table_pages}p 相当）")
+    print(f"  ⚠️  データ取得日: 2025-01-01 ｜ 必ず公式サイトで最新料金を確認してください")
+    print(f"  ⚠️  公式見積もり: https://www.nikko-pc.com/")
+    print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  {'部数':>6}  {'通常':>8}  {'早割(目安)':>10}  {'単価':>7}  {'頒布価格目安':>12}")
+    print(f"  {'':->6}  {'':->8}  {'':->10}  {'':->7}  {'':->12}")
+    for qty, total in sorted(price_table.items()):
+        unit = total // qty
+        early = int(total * EARLY_DISCOUNT_RATE)
+        # 頒布価格目安: 印刷費の1.5〜2倍を部数で割った額（同人誌相場感）
+        sell_min = (total * 2) // qty // 100 * 100  # 100円切り捨て
+        print(f"  {qty:>6}冊  {total:>7,}円  {early:>9,}円  {unit:>6,}円  {sell_min:>8,}円〜")
+    print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+    print(f"  ※ 早割は締め切り3週間前目安・実際の割引率は時期により異なる")
+    print(f"  ※ 頒布価格目安は印刷費回収ライン（実際は送料・委託手数料・自費分を考慮）\n")
+
+# ページ数が確定している場合のみ参考値を表示
+if BOOK_PDF.exists():
+    try:
+        result_pdf = subprocess.run(
+            ["pdfinfo", str(BOOK_PDF)], capture_output=True, text=True, check=True
+        )
+        for line in result_pdf.stdout.splitlines():
+            if line.startswith("Pages:"):
+                pdf_pages = int(line.split(":")[1].strip())
+                estimate_print_cost(pdf_pages)
+                break
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        pass  # pdfinfo なければスキップ（ページ数チェックで既に警告済み）
+
+# 見積もり取得日の鮮度チェック
 QUOTE_EXPIRY_DAYS = 90
 if quote_date_str:
     try:
@@ -190,11 +251,11 @@ if quote_date_str:
                 f"    → 入稿前に最新の見積もりを取り直してください（book.yaml の quote_date を更新）"
             )
         else:
-            print(f"  ✅ 印刷費見積もり: {quote_date_str}{printer_label}（{days_elapsed} 日前・有効）")
+            print(f"  ✅ 印刷費見積もり取得日: {quote_date_str}{printer_label}（{days_elapsed} 日前・有効）")
     except ValueError:
         warnings.append(f"quote_date の形式が不正です: {quote_date_str}（YYYY-MM-DD で記述してください）")
 else:
-    print("  ℹ️  印刷費見積もり: 未記録（物理本入稿時は book.yaml に quote_date を記録してください）")
+    print("  ℹ️  印刷費見積もり取得日: 未記録（入稿時は book.yaml に quote_date/printer を記録）")
 
 # ── 結果出力 ─────────────────────────────────────────────────
 print()
