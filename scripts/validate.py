@@ -28,6 +28,14 @@ except ImportError:
 ROOT = Path(os.environ.get("BOOK_ROOT", "."))
 TERMS_FILE = ROOT / "scripts" / "index-terms.yaml"
 BOOK_PDF = ROOT / "dist" / "book-digital.pdf"
+BOOK_YAML = ROOT / "book.yaml"
+
+# book.yaml から印刷仕様を読み込む
+endpaper = 0  # 遊び紙（片側枚数）デフォルト0
+if BOOK_YAML.exists():
+    with BOOK_YAML.open(encoding="utf-8") as f:
+        book_config = yaml.safe_load(f) or {}
+    endpaper = (book_config.get("print") or {}).get("endpaper", 0)
 
 # 未登録頻出語がこの件数以上あれば警告
 SUGGEST_THRESHOLD = 5
@@ -63,10 +71,20 @@ else:
         for line in result.stdout.splitlines():
             if line.startswith("Pages:"):
                 pages = int(line.split(":")[1].strip())
-                if pages % 4 != 0:
-                    errors.append(f"ページ数が4の倍数ではありません: {pages}p（印刷入稿時に白紙が自動補完されます）")
+                # 遊び紙を加味した実ページ数で4の倍数チェック
+                # 遊び紙は前後それぞれ endpaper 枚 = endpaper * 2 ページ
+                total_pages = pages + endpaper * 2
+                if endpaper > 0:
+                    note = f"本文{pages}p + 遊び紙{endpaper * 2}p = 合計{total_pages}p"
                 else:
-                    print(f"  ✅ ページ数: {pages}p（4の倍数）")
+                    note = f"{pages}p（遊び紙なし）"
+                if total_pages % 4 != 0:
+                    errors.append(
+                        f"合計ページ数が4の倍数ではありません: {note}\n"
+                        f"    → 本文を {4 - total_pages % 4}p 増やすか、遊び紙枚数を調整してください"
+                    )
+                else:
+                    print(f"  ✅ ページ数: {note}（4の倍数）")
                 break
     except (subprocess.CalledProcessError, FileNotFoundError):
         warnings.append("pdfinfo が見つかりません。ページ数チェックをスキップします（brew install poppler）")

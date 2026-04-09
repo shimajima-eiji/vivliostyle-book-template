@@ -11,3 +11,7 @@ cover:
 
 css:
   chapter_image: false
+
+# 印刷仕様（物理本入稿時に設定する。PDF頒布のみなら変更不要）
+print:
+  endpaper: 0   # 遊び紙（片側枚数）: 0=なし, 1=前後1枚ずつ, 2=前後2枚ずつ
