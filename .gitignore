@@ -3,3 +3,4 @@ dist/*.pdf
 cover/*.pdf
 theme/book.css
 node_modules/
+package-lock.json
