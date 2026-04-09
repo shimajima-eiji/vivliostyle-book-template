@@ -7,20 +7,29 @@
 PYTHON     := uv run --with "pykakasi,pyyaml,pillow" python
 COVER_PNG  := cover/cover-book.png
 COVER_PDF  := /tmp/cover-page.pdf
-BOOK_PDF   := dist/book-digital.pdf
-FINAL_PDF  := dist/book-digital-with-cover.pdf
+FINAL_PDF  := dist/book-with-cover.pdf
 
 # book-engine スクリプトの絶対パス（include 時点で確定する）
 _ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 
-.PHONY: all build css index chapters cover-img vivliostyle cover validate clean help
+# フォーマット自動検出: book/config.yml があれば Re:VIEW、なければ Vivliostyle
+_FORMAT := $(if $(wildcard $(CURDIR)/book/config.yml),review,vivliostyle)
+
+# フォーマット別 PDF 出力パス
+ifeq ($(_FORMAT),review)
+BOOK_PDF := $(CURDIR)/book/book.pdf
+else
+BOOK_PDF := dist/book-digital.pdf
+endif
+
+.PHONY: all build css index chapters cover-img vivliostyle review cover validate clean help
 
 all: build
 
-## フルビルド（CSS生成 → 索引 → PDF組版 → 表紙結合）
-build: css index vivliostyle cover
+## フルビルド（フォーマット自動検出: Re:VIEW or Vivliostyle）
+build: index $(_FORMAT) cover
 
-## book.yaml から theme/book.css を生成
+## book.yaml から theme/book.css を生成（Vivliostyle 用）
 css:
 	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-css.py
 
@@ -44,12 +53,20 @@ cover-img:
 		echo "  表紙スクリプトなし（スキップ）"; \
 	fi
 
+## Re:VIEW で PDF を組版（book/config.yml が存在する場合に有効）
+review:
+	@echo "📖 Re:VIEW でビルド中..."
+	@export PATH="$$HOME/.rbenv/shims:$$HOME/.rbenv/bin:$$PATH"; \
+	cd $(CURDIR)/book && review-pdfmaker config.yml
+	@echo "✅ $(BOOK_PDF)"
+
 ## Vivliostyle で PDF を組版
 vivliostyle:
 	npx @vivliostyle/cli build
 
 ## 表紙を先頭に結合して最終 PDF を生成（カバー画像がない場合はそのままコピー）
 cover: $(BOOK_PDF)
+	@mkdir -p dist
 	@if [ -f "$(COVER_PNG)" ]; then \
 		magick convert -density 300 $(COVER_PNG) $(COVER_PDF) 2>/dev/null; true; \
 		pdfunite $(COVER_PDF) $(BOOK_PDF) $(FINAL_PDF); \
@@ -62,7 +79,7 @@ cover: $(BOOK_PDF)
 ## ビルド成果物を検証（ページ数・索引品質）
 validate:
 	@echo "🔍 品質チェック中..."
-	@BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/validate.py
+	@BOOK_ROOT=$(CURDIR) BOOK_FORMAT=$(_FORMAT) $(PYTHON) $(_ENGINE_DIR)/scripts/validate.py
 
 ## 中間ファイルを削除
 clean:
@@ -73,10 +90,11 @@ help:
 	@echo ""
 	@echo "使い方:"
 	@echo "  make           # = make build"
-	@echo "  make build     # フルビルド（CSS→索引→組版→表紙結合）"
-	@echo "  make css       # book.yaml から book.css を再生成"
+	@echo "  make build     # フルビルド（フォーマット自動検出: $(_FORMAT)）"
+	@echo "  make review    # Re:VIEW でビルド（book/config.yml 必須）"
+	@echo "  make vivliostyle # Vivliostyle でビルド"
+	@echo "  make css       # book.yaml から book.css を再生成（Vivliostyle 用）"
 	@echo "  make index     # 索引のみ再生成"
 	@echo "  make chapters  # 章扉画像を再生成"
 	@echo "  make cover-img # 表紙画像を再生成"
-	@echo "  make vivliostyle # 組版のみ"
 	@echo "  make validate  # ビルド成果物の品質チェック"

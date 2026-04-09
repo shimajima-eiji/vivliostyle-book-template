@@ -8,6 +8,10 @@ make validate で呼ぶ。問題があれば非ゼロで終了する。
   3. 未登録頻出語が閾値（SUGGEST_THRESHOLD）以上ないか
   4. 印刷費参考値・市場相場との比較（完全受注生産対応）
 
+対応フォーマット（BOOK_FORMAT 環境変数で切り替え、未設定時は自動検出）:
+  review      … book/book.pdf + book/ch*.re をスキャン
+  vivliostyle … dist/book-digital.pdf + manuscript/ch*/main.md をスキャン
+
 使い方:
   BOOK_ROOT=/path/to/book uv run --with "pykakasi,pyyaml" python book-template/scripts/validate.py
 """
@@ -29,9 +33,24 @@ except ImportError:
 
 ROOT = Path(os.environ.get("BOOK_ROOT", "."))
 TERMS_FILE = ROOT / "scripts" / "index-terms.yaml"
-BOOK_PDF = ROOT / "dist" / "book-digital.pdf"
 BOOK_YAML = ROOT / "book.yaml"
 
+# フォーマット判定: 環境変数 > 自動検出（book/config.yml の有無）
+_fmt_env = os.environ.get("BOOK_FORMAT", "")
+if _fmt_env in ("review", "vivliostyle"):
+    FORMAT = _fmt_env
+else:
+    FORMAT = "review" if (ROOT / "book" / "config.yml").exists() else "vivliostyle"
+
+# フォーマット別の PDF パスと章ファイルパターン
+if FORMAT == "review":
+    BOOK_PDF = ROOT / "book" / "book.pdf"
+else:
+    BOOK_PDF = ROOT / "dist" / "book-digital.pdf"
+
+print(f"  フォーマット: {FORMAT}  PDF: {BOOK_PDF}")
+
+# 印刷仕様の読み込み元: Re:VIEW は book/config.yml、Vivliostyle は book.yaml
 # book.yaml から印刷仕様を読み込む
 # 表紙（表1〜表4）・遊び紙は本文ページ数とは別カウントのため加算しない
 binding = "wireless"  # デフォルト: 無線綴じ
@@ -98,19 +117,40 @@ else:
     except (subprocess.CalledProcessError, FileNotFoundError):
         warnings.append("pdfinfo が見つかりません。ページ数チェックをスキップします（brew install poppler）")
 
+def _strip_review_markup(text: str) -> str:
+    """Re:VIEW マークアップを除去（索引検索用）。"""
+    text = re.sub(r"^//(?:list|cmd|terminal|source|emlist|listnum|caution|note|warning|info)\b[^\n]*\n.*?^//\}",
+                  "", text, flags=re.DOTALL | re.MULTILINE)
+    text = re.sub(r"@<hidx>\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"@<code>\{[^}]*\}", "", text)
+    text = re.sub(r"@<\w+>\{([^}]*)\}", r"\1", text)
+    text = re.sub(r"^//\w+[^\n]*$", "", text, flags=re.MULTILINE)
+    text = re.sub(r"^={1,6}(?:\[.*?\])?\s*", "", text, flags=re.MULTILINE)
+    return text
+
+
 # ── 2. 索引ヒットなし用語チェック ────────────────────────────
 if not TERMS_FILE.exists():
     warnings.append(f"索引用語ファイルが見つかりません: {TERMS_FILE}")
 else:
-    manuscript = ROOT / "manuscript"
     chapter_files: list[Path] = []
-    if manuscript.exists():
-        chapter_files = sorted(manuscript.rglob("main.md"), key=lambda p: p.parent.name)
+    if FORMAT == "review":
+        review_dir = ROOT / "book"
+        if review_dir.exists():
+            chapter_files = sorted(
+                f for f in review_dir.iterdir()
+                if f.suffix == ".re" and re.match(r"ch\d+", f.stem)
+            )
+    else:
+        manuscript = ROOT / "manuscript"
+        if manuscript.exists():
+            chapter_files = sorted(manuscript.rglob("main.md"), key=lambda p: p.parent.name)
 
     chapter_texts: dict[str, str] = {}
     for path in chapter_files:
         fname = str(path.relative_to(ROOT))
-        chapter_texts[fname] = path.read_text(encoding="utf-8")
+        raw = path.read_text(encoding="utf-8")
+        chapter_texts[fname] = _strip_review_markup(raw) if FORMAT == "review" else raw
 
     with TERMS_FILE.open(encoding="utf-8") as f:
         terms_data: list[dict] = yaml.safe_load(f) or []
@@ -149,12 +189,16 @@ else:
         for p in entry.get("patterns", []):
             registered.add(p)
 
+    # chapter_texts は既にマークアップ除去済み
     combined = "\n".join(chapter_texts.values())
-    combined = re.sub(r"```[\s\S]*?```", "", combined)
-    combined = re.sub(r"`[^`\n]+`", "", combined)
-    combined = re.sub(r"^#{1,6}[^\n]*$", "", combined, flags=re.MULTILINE)
-    combined = re.sub(r"^\|[^\n]*$", "", combined, flags=re.MULTILINE)
-    combined = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", combined)
+    if FORMAT == "review":
+        combined = re.sub(r"^//.+$", "", combined, flags=re.MULTILINE)
+    else:
+        combined = re.sub(r"```[\s\S]*?```", "", combined)
+        combined = re.sub(r"`[^`\n]+`", "", combined)
+        combined = re.sub(r"^#{1,6}[^\n]*$", "", combined, flags=re.MULTILINE)
+        combined = re.sub(r"^\|[^\n]*$", "", combined, flags=re.MULTILINE)
+        combined = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", combined)
 
     candidates = re.findall(r"[A-Za-z][A-Za-z0-9]*(?:\.[A-Za-z]+)*|[ァ-ヶー]{3,}", combined)
     counter = Counter(candidates)
