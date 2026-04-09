@@ -31,11 +31,17 @@ BOOK_PDF = ROOT / "dist" / "book-digital.pdf"
 BOOK_YAML = ROOT / "book.yaml"
 
 # book.yaml から印刷仕様を読み込む
-endpaper = 0  # 遊び紙（片側枚数）デフォルト0
+# 表紙（表1〜表4）・遊び紙は本文ページ数とは別カウントのため加算しない
+binding = "wireless"  # デフォルト: 無線綴じ
 if BOOK_YAML.exists():
     with BOOK_YAML.open(encoding="utf-8") as f:
         book_config = yaml.safe_load(f) or {}
-    endpaper = (book_config.get("print") or {}).get("endpaper", 0)
+    binding = (book_config.get("print") or {}).get("binding", "wireless")
+
+# 製本方式ごとのページ数の倍数要件
+# - 中綴じ(saddle): 4の倍数必須（1枚=4p の折り丁構造）
+# - 無線綴じ(wireless): 2の倍数で可（料金設定は印刷所により4単位が多い）
+PAGE_MULTIPLE = 4 if binding == "saddle" else 2
 
 # 未登録頻出語がこの件数以上あれば警告
 SUGGEST_THRESHOLD = 5
@@ -71,20 +77,16 @@ else:
         for line in result.stdout.splitlines():
             if line.startswith("Pages:"):
                 pages = int(line.split(":")[1].strip())
-                # 遊び紙を加味した実ページ数で4の倍数チェック
-                # 遊び紙は前後それぞれ endpaper 枚 = endpaper * 2 ページ
-                total_pages = pages + endpaper * 2
-                if endpaper > 0:
-                    note = f"本文{pages}p + 遊び紙{endpaper * 2}p = 合計{total_pages}p"
-                else:
-                    note = f"{pages}p（遊び紙なし）"
-                if total_pages % 4 != 0:
+                # 表紙（表1〜表4）・遊び紙は印刷所が別管理するため本文PDFのみでチェック
+                binding_label = "中綴じ・4の倍数必須" if binding == "saddle" else "無線綴じ・2の倍数"
+                if pages % PAGE_MULTIPLE != 0:
+                    shortage = PAGE_MULTIPLE - (pages % PAGE_MULTIPLE)
                     errors.append(
-                        f"合計ページ数が4の倍数ではありません: {note}\n"
-                        f"    → 本文を {4 - total_pages % 4}p 増やすか、遊び紙枚数を調整してください"
+                        f"本文ページ数が{PAGE_MULTIPLE}の倍数ではありません: {pages}p（{binding_label}）\n"
+                        f"    → 本文を {shortage}p 増やしてください"
                     )
                 else:
-                    print(f"  ✅ ページ数: {note}（4の倍数）")
+                    print(f"  ✅ ページ数: {pages}p（{binding_label}・OK）")
                 break
     except (subprocess.CalledProcessError, FileNotFoundError):
         warnings.append("pdfinfo が見つかりません。ページ数チェックをスキップします（brew install poppler）")
