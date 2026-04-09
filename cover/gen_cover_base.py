@@ -56,6 +56,16 @@ def _draw_shadow(draw, text, pos, font, fill, shadow=(0, 0, 0, 100), offset=(2, 
     draw.text(pos, text, font=font, fill=fill)
 
 
+def _apply_overlay_rectangles(img, overlay_rectangles):
+    if not overlay_rectangles:
+        return img
+    layer = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+    for rect in overlay_rectangles:
+        draw.rectangle(rect["box"], fill=rect["fill"])
+    return Image.alpha_composite(img, layer)
+
+
 def generate(
     bg_path: str,
     title_line1: str,
@@ -74,6 +84,7 @@ def generate(
     font_size_sub: int = 48,
     author_margin_right: int = 150,
     author_bottom_margin: int = 150,
+    overlay_rectangles: list[dict] | None = None,
 ) -> None:
     """背景画像にテキストを合成して表紙画像を生成する。"""
     if os.path.exists(bg_path):
@@ -82,6 +93,8 @@ def generate(
     else:
         print(f"背景画像なし（{bg_path}）。チャコールグレーで生成します。")
         img = Image.new("RGBA", (W, H), (26, 26, 27, 255))
+
+    img = _apply_overlay_rectangles(img, overlay_rectangles)
 
     draw = ImageDraw.Draw(img)
 
