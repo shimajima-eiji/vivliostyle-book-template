@@ -23,14 +23,11 @@ mise install
 # 1. このリポジトリをclone（book-template という名前で置く）
 git clone https://github.com/shimajima-eiji/vivliostyle-book-template book-template
 
-# 2. 依存パッケージをインストール
-cd book-template && npm install && cd ..
-
-# 3. 自分の書籍リポジトリを同じ階層に作る
+# 2. 自分の書籍リポジトリを同じ階層に作る
 mkdir my-book && cd my-book
 git init
 
-# 4. book-template からファイルをコピーして初期化
+# 3. book-template からファイルをコピーして初期化
 cp -r ../book-template/. .
 bash scripts/init.sh
 ```
