@@ -16,6 +16,7 @@ import re
 import subprocess
 import sys
 from collections import Counter
+from datetime import date
 from pathlib import Path
 
 try:
@@ -33,10 +34,15 @@ BOOK_YAML = ROOT / "book.yaml"
 # book.yaml から印刷仕様を読み込む
 # 表紙（表1〜表4）・遊び紙は本文ページ数とは別カウントのため加算しない
 binding = "wireless"  # デフォルト: 無線綴じ
+quote_date_str = None
+printer = None
 if BOOK_YAML.exists():
     with BOOK_YAML.open(encoding="utf-8") as f:
         book_config = yaml.safe_load(f) or {}
-    binding = (book_config.get("print") or {}).get("binding", "wireless")
+    print_config = book_config.get("print") or {}
+    binding = print_config.get("binding", "wireless")
+    quote_date_str = print_config.get("quote_date")
+    printer = print_config.get("printer")
 
 # 製本方式ごとのページ数の倍数要件
 # - 中綴じ(saddle): 4の倍数必須（1枚=4p の折り丁構造）
@@ -168,6 +174,27 @@ else:
         )
     else:
         print(f"  ✅ 未登録頻出語: {len(suggestions)} 件（閾値 {SUGGEST_THRESHOLD} 件未満）")
+
+# ── 4. 印刷費見積もり日チェック ──────────────────────────────
+# 印刷費の自動計算は行わない（印刷所APIなし・価格改定追跡不可のため）
+# 見積もりを「取ったか」「古くないか」だけを確認する
+QUOTE_EXPIRY_DAYS = 90
+if quote_date_str:
+    try:
+        quote_date = date.fromisoformat(str(quote_date_str))
+        days_elapsed = (date.today() - quote_date).days
+        printer_label = f"（{printer}）" if printer else ""
+        if days_elapsed > QUOTE_EXPIRY_DAYS:
+            warnings.append(
+                f"印刷費見積もりが {days_elapsed} 日前{printer_label}です。\n"
+                f"    → 入稿前に最新の見積もりを取り直してください（book.yaml の quote_date を更新）"
+            )
+        else:
+            print(f"  ✅ 印刷費見積もり: {quote_date_str}{printer_label}（{days_elapsed} 日前・有効）")
+    except ValueError:
+        warnings.append(f"quote_date の形式が不正です: {quote_date_str}（YYYY-MM-DD で記述してください）")
+else:
+    print("  ℹ️  印刷費見積もり: 未記録（物理本入稿時は book.yaml に quote_date を記録してください）")
 
 # ── 結果出力 ─────────────────────────────────────────────────
 print()
