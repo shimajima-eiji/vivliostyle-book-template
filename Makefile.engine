@@ -1,0 +1,76 @@
+# Makefile.engine — 共通ビルドロジック（book-template 同梱）
+# 各書籍の Makefile から include して使う:
+#
+#   ENGINE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../book-template
+#   include $(ENGINE_DIR)/Makefile.engine
+
+PYTHON     := uv run --with "pykakasi,pyyaml,pillow" python
+COVER_PNG  := cover/cover-book.png
+COVER_PDF  := /tmp/cover-page.pdf
+BOOK_PDF   := dist/book-digital.pdf
+FINAL_PDF  := dist/book-digital-with-cover.pdf
+
+# book-engine スクリプトの絶対パス（include 時点で確定する）
+_ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+
+.PHONY: all build css index chapters cover-img vivliostyle cover clean help
+
+all: build
+
+## フルビルド（CSS生成 → 索引 → PDF組版 → 表紙結合）
+build: css index vivliostyle cover
+
+## book.yaml から theme/book.css を生成
+css:
+	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-css.py
+
+## 索引を再生成（scripts/index-terms.yaml が変更されたとき）
+index:
+	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-index.py
+
+## 章扉画像を再生成（assets/chapter-data.py が存在する場合のみ）
+chapters:
+	@if [ -f assets/chapter-data.py ]; then \
+		$(PYTHON) assets/chapter-data.py; \
+	else \
+		echo "  章扉スクリプトなし（スキップ）"; \
+	fi
+
+## 表紙画像を再生成（cover/cover-data.py が存在する場合のみ）
+cover-img:
+	@if [ -f cover/cover-data.py ]; then \
+		$(PYTHON) cover/cover-data.py; \
+	else \
+		echo "  表紙スクリプトなし（スキップ）"; \
+	fi
+
+## Vivliostyle で PDF を組版
+vivliostyle:
+	npx @vivliostyle/cli build
+
+## 表紙を先頭に結合して最終 PDF を生成（カバー画像がない場合はそのままコピー）
+cover: $(BOOK_PDF)
+	@if [ -f "$(COVER_PNG)" ]; then \
+		magick convert -density 300 $(COVER_PNG) $(COVER_PDF) 2>/dev/null; true; \
+		pdfunite $(COVER_PDF) $(BOOK_PDF) $(FINAL_PDF); \
+		echo "✅ $(FINAL_PDF) （表紙あり）"; \
+	else \
+		cp $(BOOK_PDF) $(FINAL_PDF); \
+		echo "⚠️  カバー画像なし（$(COVER_PNG)）。$(FINAL_PDF) = 本文のみ"; \
+	fi
+
+## 中間ファイルを削除
+clean:
+	rm -f $(COVER_PDF) theme/book.css
+
+help:
+	@grep -E '^##' $(_ENGINE_DIR)/Makefile.engine | sed 's/^## /  /'
+	@echo ""
+	@echo "使い方:"
+	@echo "  make           # = make build"
+	@echo "  make build     # フルビルド（CSS→索引→組版→表紙結合）"
+	@echo "  make css       # book.yaml から book.css を再生成"
+	@echo "  make index     # 索引のみ再生成"
+	@echo "  make chapters  # 章扉画像を再生成"
+	@echo "  make cover-img # 表紙画像を再生成"
+	@echo "  make vivliostyle # 組版のみ"
