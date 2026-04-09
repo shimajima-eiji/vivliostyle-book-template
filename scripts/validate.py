@@ -196,9 +196,22 @@ NIKKO_ONDEMAND_A5_MONO: dict[int, dict[int, int]] = {
 }
 EARLY_DISCOUNT_RATE = 0.80  # 早割（3週間以上前）: 約20%引き
 
+def _physical_price_from_unit_cost(unit_cost: int) -> int:
+    """1冊あたり印刷費から物理本頒布価格を算出する（100円単位切り上げ）。
+    印刷費の2倍を最低ラインとする（オペレーションコスト・搬入搬出を考慮）。
+    """
+    return (unit_cost * 2 + 99) // 100 * 100
+
+
+def _pdf_price_from_physical(physical_price: int) -> tuple[int, int]:
+    """物理本価格からPDF価格レンジを逆算する（物理本の50〜70%）。"""
+    pdf_min = physical_price * 50 // 100 // 100 * 100   # 50%, 100円切り捨て
+    pdf_max = physical_price * 70 // 100 // 100 * 100   # 70%, 100円切り捨て
+    return pdf_min, pdf_max
+
+
 def estimate_print_cost(total_pages: int) -> None:
     """ページ数に近い料金テーブルを参照して参考値を表示する。"""
-    # 最も近いページ数エントリを選ぶ（以上で最小）
     candidates = [p for p in NIKKO_ONDEMAND_A5_MONO if p >= total_pages]
     if not candidates:
         print("  ℹ️  印刷費参考値: テーブル範囲外（公式サイトで見積もりしてください）")
@@ -207,58 +220,34 @@ def estimate_print_cost(total_pages: int) -> None:
     table_pages = min(candidates)
     price_table = NIKKO_ONDEMAND_A5_MONO[table_pages]
 
+    # 完全受注生産の基準: 10部テーブルの1冊単価（最もコスト高）
+    unit_cost_on_demand = price_table[10] // 10
+    physical_price_on_demand = _physical_price_from_unit_cost(unit_cost_on_demand)
+    pdf_min, pdf_max = _pdf_price_from_physical(physical_price_on_demand)
+
     print(f"\n  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f"  ⚠️  印刷費【参考値】— 日光企画・オンデマンド・A5モノクロ（{table_pages}p 相当）")
     print(f"  ⚠️  データ取得日: 2025-01-01 ｜ 必ず公式サイトで最新料金を確認してください")
     print(f"  ⚠️  公式見積もり: https://www.nikko-pc.com/")
     print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"  {'部数':>6}  {'通常':>8}  {'早割(目安)':>10}  {'単価':>7}  {'物理本価格目安':>14}")
-    print(f"  {'':->6}  {'':->8}  {'':->10}  {'':->7}  {'':->14}")
+    print(f"  🎯  完全受注生産の場合（1冊ずつ刷る想定）")
+    print(f"  　　1冊あたり印刷費: {unit_cost_on_demand:,}円（10部ロットの単価）")
+    print(f"  　　→ 物理本価格目安: {physical_price_on_demand:,}円〜（印刷費×2倍ライン）")
+    print(f"  　　→ PDF価格目安:   {pdf_min:,}〜{pdf_max:,}円（物理本の50〜70%）")
+    print(f"  ─────────────────────────────────────────────────")
+    print(f"  📊  まとめて刷る場合の比較（部数別）")
+    print(f"  {'部数':>6}  {'印刷費合計':>10}  {'早割目安':>9}  {'単価':>6}  {'物理本目安':>10}  {'PDF目安':>12}")
+    print(f"  {'':->6}  {'':->10}  {'':->9}  {'':->6}  {'':->10}  {'':->12}")
     for qty, total in sorted(price_table.items()):
         unit = total // qty
         early = int(total * EARLY_DISCOUNT_RATE)
-        # 物理本頒布価格目安: 印刷費の2倍÷部数（100円単位切り上げ）
-        sell_min = ((total * 2) // qty + 99) // 100 * 100
-        print(f"  {qty:>6}冊  {total:>7,}円  {early:>9,}円  {unit:>6,}円  {sell_min:>10,}円〜")
+        phys = _physical_price_from_unit_cost(unit)
+        p_min, p_max = _pdf_price_from_physical(phys)
+        marker = " ← 受注生産基準" if qty == 10 else ""
+        print(f"  {qty:>6}冊  {total:>9,}円  {early:>8,}円  {unit:>5,}円  {phys:>8,}円〜  {p_min:,}〜{p_max:,}円{marker}")
     print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
     print(f"  ※ 早割は締め切り3週間前目安・実際の割引率は時期により異なる")
-    print(f"  ※ 物理本価格目安は印刷費回収ライン（送料・委託手数料・自費分は別途考慮）\n")
-
-    estimate_pdf_price(total_pages)
-
-
-# BOOTH・技術書典のPDF頒布相場（2025年時点）
-# ページ数帯ごとの一般的な価格レンジ。無料〜有料の判断基準も含む
-PDF_PRICE_GUIDE: list[tuple[int, int, str, str]] = [
-    # (ページ下限, ページ上限, 推奨価格帯, 補足)
-    (1,   29, "無料〜300円",  "入門・ショートコンテンツ。BOOTH無料配布も多い"),
-    (30,  59, "300〜500円",  "薄い本の主流。技術書典では500円が多い"),
-    (60,  99, "500〜800円",  "標準的なページ数。600〜700円が相場"),
-    (100, 149, "700〜1000円", "読み応えあり。1000円でも抵抗感は少ない"),
-    (150, 999, "1000〜1500円", "厚い本。物理本と競合するため上限に注意"),
-]
-
-def estimate_pdf_price(total_pages: int) -> None:
-    """ページ数からPDF頒布価格の相場を表示する。"""
-    guide = next(
-        (g for g in PDF_PRICE_GUIDE if g[0] <= total_pages <= g[1]),
-        None
-    )
-    print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    print(f"  📄  PDF頒布価格【市場相場】— BOOTH・技術書典（2025年時点）")
-    print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-    if guide:
-        _, _, price_range, note = guide
-        print(f"  {total_pages}p の相場: {price_range}")
-        print(f"  補足: {note}")
-    else:
-        print(f"  {total_pages}p: テーブル範囲外")
-    print(f"  ─────────────────────────────────────────────────")
-    print(f"  【物理本と同時頒布する場合の価格設定指針】")
-    print(f"  - PDF = 物理本の 50〜70% が一般的（例: 物理600円 → PDF 300〜400円）")
-    print(f"  - 物理本購入者にPDFを付ける場合はBOOTHのまとめ買い割引を活用")
-    print(f"  - 無料配布はフォロワー獲得・次回作への誘導として有効")
-    print(f"  ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n")
+    print(f"  ※ PDF価格 = 物理本の50〜70%（同時頒布の一般的な相場）\n")
 
 # ページ数が確定している場合のみ参考値を表示
 if BOOK_PDF.exists():
