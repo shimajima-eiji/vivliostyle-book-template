@@ -1,0 +1,13 @@
+title: "{{BOOK_TITLE}}"
+author: "{{AUTHOR}}"
+
+cover:
+  title_line1: "{{BOOK_TITLE}}"
+  title_line2: ""
+  subtitle_line1: ""
+  subtitle_line2: ""
+  font_size_title: 110
+  bg_image: "cover/bg_draft.png"
+
+css:
+  chapter_image: false
