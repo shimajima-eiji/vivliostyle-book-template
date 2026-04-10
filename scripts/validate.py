@@ -229,6 +229,52 @@ else:
     else:
         print(f"  ✅ 未登録頻出語: {len(suggestions)} 件（閾値 {SUGGEST_THRESHOLD} 件未満）")
 
+# ── 3b. 章別ボリューム表 ─────────────────────────────────────
+# chapter_texts が作成済みの場合のみ実行（索引チェックが有効だったとき）
+if "chapter_texts" in dir() and chapter_texts:
+    page_target = (book_config.get("print") or {}).get("page_target") if BOOK_YAML.exists() else None
+
+    # 文字数をカウント（Markdownタグ・画像・コードブロック除去後）
+    def _count_chars(text: str) -> int:
+        t = re.sub(r"```[\s\S]*?```", "", text)
+        t = re.sub(r"`[^`\n]+`", "", t)
+        t = re.sub(r"!\[[^\]]*\]\([^)]*\)", "", t)
+        t = re.sub(r"^#{1,6}[^\n]*$", "", t, flags=re.MULTILINE)
+        t = re.sub(r"^\|[^\n]*$", "", t, flags=re.MULTILINE)
+        t = re.sub(r"[ \t\n\r]", "", t)
+        return len(t)
+
+    chapter_volumes = [(fname, _count_chars(text)) for fname, text in sorted(chapter_texts.items())]
+    total_chars = sum(c for _, c in chapter_volumes)
+
+    print(f"\n  📄  章別ボリューム（本文文字数）")
+    for fname, chars in chapter_volumes:
+        bar = "█" * (chars // 300)
+        short = fname.replace("manuscript/", "").replace("manuscripts/", "").replace("/main.md", "")
+        print(f"    {short:<35} {chars:>5}字  {bar}")
+    print(f"    {'合計':<35} {total_chars:>5}字")
+
+    if page_target:
+        print(f"\n  🎯  目標ページ数: {page_target}p")
+        if BOOK_PDF.exists():
+            try:
+                r = subprocess.run(["pdfinfo", str(BOOK_PDF)], capture_output=True, text=True, check=True)
+                for line in r.stdout.splitlines():
+                    if line.startswith("Pages:"):
+                        cur_pages = int(line.split(":")[1].strip())
+                        diff = page_target - cur_pages
+                        if diff > 0:
+                            avg_chars_per_page = total_chars // cur_pages if cur_pages else 600
+                            print(f"  ℹ️  現在 {cur_pages}p → 目標まで +{diff}p 不足（約 {diff * avg_chars_per_page:,}字 追加）")
+                        elif diff < 0:
+                            avg_chars_per_page = total_chars // cur_pages if cur_pages else 600
+                            print(f"  ℹ️  現在 {cur_pages}p → 目標より {abs(diff)}p 超過（約 {abs(diff) * avg_chars_per_page:,}字 削減）")
+                        else:
+                            print(f"  ✅  現在 {cur_pages}p = 目標 {page_target}p")
+                        break
+            except (subprocess.CalledProcessError, FileNotFoundError):
+                pass
+
 # ── 4. 印刷費参考値・市場相場 ─────────────────────────────────
 # 【重要】以下の料金テーブルは参考値です。
 # - データ取得日: 2025-01-01（日光企画・オンデマンド印刷・A5・モノクロ本文）
