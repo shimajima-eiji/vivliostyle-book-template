@@ -56,7 +56,13 @@ make clean       # dist/ を削除
 
 1. `manuscript/chXX/main.md` を作成
 2. `vivliostyle.config.js` の `entry` に追記
-3. `make vivliostyle` で確認
+3. `assets/chapter-data.py` の `CHAPTERS` / `TITLE_LINES` にエントリを追加
+4. `make chapters` で `assets/chapter-XX.png` を生成
+5. `manuscript/chXX/main.md` の冒頭に章扉タグを追加:
+   ```markdown
+   ![](../../assets/chapter-XX.png){.chapter-image}
+   ```
+6. `make vivliostyle` で確認
 
 ## 索引を管理するとき
 
