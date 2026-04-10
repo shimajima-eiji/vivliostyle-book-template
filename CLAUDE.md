@@ -13,13 +13,16 @@ manuscript/
   chXX/main.md  追加章
   index.md      索引（make index で自動生成）
   colophon.md   奥付
+assets/
+  chapter-data.py   章扉画像データ定義（make chapters で chapter-XX.png を生成）
+  chapter-XX.png    章扉画像（原稿の ![](../../assets/chapter-XX.png){.chapter-image} で参照）
+  diagrams/         図解画像（採用版。D2/Mermaid等で生成）
 scripts/
-  gen-index.py      索引自動生成
   index-terms.yaml  索引用語リスト（手動管理）
 theme/
   book.css      Vivliostyle テーマ（A5縦型）
 cover/
-  cover-book.png  表紙画像（make cover で生成）
+  cover-book.png  表紙画像（make cover-img で生成）
 dist/
   book-digital.pdf            本文PDF
   book-digital-with-cover.pdf 表紙込みPDF（配布用）
