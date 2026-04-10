@@ -30,6 +30,46 @@ include $(ENGINE_DIR)/Makefile.engine
 MAKEFILE_EOF
 echo "✅ Makefile を book-template 参照版に更新しました"
 
+# assets/ ディレクトリと chapter-data.py スケルトンを作成
+mkdir -p assets/diagrams
+
+if [ ! -f assets/chapter-data.py ]; then
+  cat > assets/chapter-data.py <<'EOF'
+"""
+章扉画像データ定義 — {{BOOK_TITLE}}
+レイアウトロジックは book-template/assets/gen_chapter_covers_base.py に集約。
+
+使い方: make chapters  または  uv run --with pillow python assets/chapter-data.py
+"""
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / "book-template" / "assets"))
+from gen_chapter_covers_base import render_all
+
+# パレット定義 — 書籍テーマに合わせて調整する
+PALETTES = {
+    "main":  {"bg": (245, 248, 255), "accent": (30, 60, 120),  "text": (18, 22, 38)},
+    "sub":   {"bg": (245, 250, 255), "accent": (25, 100, 160), "text": (15, 30, 50)},
+}
+
+# (章番号, 章ラベル, タイトル, サブコピー, タグ漢字1文字, パレット名)
+CHAPTERS = [
+    # ("01", "第1章", "章タイトル",
+    #  "サブコピーをここに書く",
+    #  "起", "main"),
+]
+
+# 章番号 → タイトル表示行のリスト（折り返しを手動制御）
+TITLE_LINES = {
+    # "01": ["章タイトル"],
+}
+
+if __name__ == "__main__":
+    render_all(PALETTES, CHAPTERS, TITLE_LINES, out_dir=Path(__file__).parent)
+EOF
+  echo "✅ assets/chapter-data.py を作成しました（CHAPTERS/TITLE_LINES を書き込んでください）"
+fi
+
 if [ ! -f cover/fix-ledger.md ]; then
   cat > cover/fix-ledger.md <<'EOF'
 # Cover Fix Ledger
