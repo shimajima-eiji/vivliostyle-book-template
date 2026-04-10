@@ -143,8 +143,17 @@ else:
             )
     else:
         manuscript = ROOT / "manuscript"
+        manuscripts = ROOT / "manuscripts"
         if manuscript.exists():
+            # chXX/main.md 構造（ai-writing-guide / teaching 等）
             chapter_files = sorted(manuscript.rglob("main.md"), key=lambda p: p.parent.name)
+        elif manuscripts.exists():
+            # XX-title.md フラット構造（freelance-contract-os 等）
+            SKIP_FLAT = {"index.md", "colophon.md", "preface.md", "author.md", "afterword.md", "config.yaml"}
+            chapter_files = sorted(
+                f for f in manuscripts.glob("*.md")
+                if f.name not in SKIP_FLAT
+            )
 
     chapter_texts: dict[str, str] = {}
     for path in chapter_files:
