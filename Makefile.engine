@@ -121,6 +121,32 @@ ship-gray:
 		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR); \
 	fi
 
+# ship-b5 — B5版を生成して dist/ に配置する
+# Re:VIEW: config.yml の paper を一時的にb5に変更してビルド→裏表紙結合→元に戻す
+# Vivliostyle: 未対応（CSS変更が必要）
+# 表紙は PAPER_SIZE=b5 で print_specs を切り替えて再生成する
+.PHONY: ship-b5
+ship-b5:
+	@mkdir -p dist
+	@TITLE=$$(grep '^title:' book.yaml | head -1 | sed 's/^title: *["'"'"']\(.*\)["'"'"']/\1/'); \
+	echo "📦 B5版を生成: $${TITLE}"; \
+	if [ "$(_FORMAT)" = "review" ]; then \
+		sed -i '' 's/paper=a5/paper=b5/g' book/config.yml; \
+		cd book && PATH="/Library/TeX/texbin:$$PATH" bundle exec review-pdfmaker config.yml && cd ..; \
+		sed -i '' 's/paper=b5/paper=a5/g' book/config.yml; \
+		PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --back $(BACK_PNG) --spine $(SPINE_PNG) --out cover/print-b5; \
+		BACK_PDF="cover/print-b5/back-trim-300dpi.pdf"; \
+		if [ -f "$$BACK_PDF" ]; then \
+			qpdf --empty --pages book/book.pdf "$$BACK_PDF" -- "dist/$${TITLE}_電子版_カラー_B5.pdf" && echo "$${TITLE}_電子版_カラー_B5.pdf OK"; \
+		else \
+			cp book/book.pdf "dist/$${TITLE}_電子版_カラー_B5.pdf" && echo "$${TITLE}_電子版_カラー_B5.pdf OK（裏表紙なし）"; \
+		fi; \
+	else \
+		echo "⚠️ Vivliostyle B5版は未対応です（CSSの変更が必要）"; \
+	fi; \
+	echo "---"; \
+	ls -1 dist/*.pdf
+
 .PHONY: clean
 clean:
 	rm -rf dist assets cover/print $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG) $(WRAP_PNG) $(COVER_JPG)
