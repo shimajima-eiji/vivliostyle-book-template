@@ -2,7 +2,14 @@ import os
 import platform
 from PIL import Image, ImageDraw, ImageFont
 
-H = 1754
+try:
+    from print_specs import TRIM_H_PX
+except ImportError:
+    import sys
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from print_specs import TRIM_H_PX
+
+H = TRIM_H_PX  # A5 300dpi = 2480px
 
 def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:
     if platform.system() == "Windows":
