@@ -1,4 +1,6 @@
 # Makefile.engine — 共通ビルドロジック（book-template 同梱）
+# Re:VIEW / Vivliostyle 両対応。book/config.yml の有無で format を自動検出する。
+# ship/preflight/spread は scripts/ship.py, scripts/preflight-check.py に委譲。
 PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy,pypdf,reportlab,pymupdf" python
 COVER_PNG  := cover/cover-book.png
 COVER_JPG  := cover/cover.jpeg
