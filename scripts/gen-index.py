@@ -183,7 +183,7 @@ if FORMAT == "review":
         "     Re:VIEW の実際の索引は各 .re ファイル内の @<hidx>{用語} マーカーで管理します。 -->\n",
     ]
 else:
-    lines = ["# 索引\n"]
+    lines = ["---\nclass: index\n---\n\n# 索引\n"]
 total = 0
 zero_hit = []
 
