@@ -102,7 +102,7 @@ cover-b5-prep:
 
 .PHONY: cover
 cover:
-	@echo "This target is deprecated. Please use scripts/rebuild-clean.sh or run 'python3 book-template/scripts/finalize-dist.py'"
+	@echo "This target is deprecated. Use 'make ship' instead."
 
 # ship — scripts/ship.py に委譲。dist/{SIZE}/ にディレクトリ構成で配置する。
 # 構成:
