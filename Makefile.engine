@@ -143,8 +143,12 @@ ship-b5:
 	echo "📦 B5版を生成: $${TITLE}"; \
 	if [ "$(_FORMAT)" = "review" ]; then \
 		sed -i '' 's/paper=a5/paper=b5/g' book/config.yml; \
+		if [ -f book/images/cover-b5.pdf ]; then \
+			sed -i '' 's/coverimage: cover-a5.pdf/coverimage: cover-b5.pdf/' book/config.yml; \
+		fi; \
 		cd book && PATH="/Library/TeX/texbin:$$PATH" bundle exec review-pdfmaker config.yml && cd ..; \
 		sed -i '' 's/paper=b5/paper=a5/g' book/config.yml; \
+		sed -i '' 's/coverimage: cover-b5.pdf/coverimage: cover-a5.pdf/' book/config.yml; \
 		FRONT_B5="cover/_fixed/front-b5.png"; BACK_B5="cover/_fixed/back-b5.png"; \
 		if [ ! -f "$$FRONT_B5" ] || [ ! -f "$$BACK_B5" ]; then \
 			echo "⚠️ B5版表紙がありません: make cover-b5-prep で生成してください"; exit 1; \
