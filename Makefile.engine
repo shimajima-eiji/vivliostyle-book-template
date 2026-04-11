@@ -88,6 +88,7 @@ cover: $(BOOK_PDF) $(COVER_PNG)
 	@echo "Final PDF generated: $(FINAL_PDF)"
 
 # ship — dist/ に書名入りの日本語ファイル名でファイルを集約する
+# 運用フロー: 既存の日本語PDFをgit commitで保存 → 削除 → 再生成 → commit
 # 出力ファイルの意味:
 #   {書名}_電子版.pdf          電子配布用（表紙込み本文）
 #   {書名}_本文印刷用.pdf       印刷用本文（表紙なし）
@@ -97,6 +98,12 @@ cover: $(BOOK_PDF) $(COVER_PNG)
 ship:
 	@mkdir -p dist
 	@TITLE=$$(python3 -c "import re; print(re.search(r'title:\s*[\"\'](.*?)[\"\']\s*$$', open('book.yaml').read(), re.M).group(1))"); \
+	OLD=$$(ls dist/"$${TITLE}"_*.pdf 2>/dev/null); \
+	if [ -n "$$OLD" ]; then \
+		git add dist/"$${TITLE}"_*.pdf 2>/dev/null; \
+		git diff --cached --quiet || git commit -m "ship: $${TITLE} 旧版を保存"; \
+		rm -f dist/"$${TITLE}"_*.pdf && echo "旧版を削除しました"; \
+	fi; \
 	if [ "$(_FORMAT)" = "review" ]; then \
 		cp book/book.pdf "dist/$${TITLE}_本文印刷用.pdf" && echo "$${TITLE}_本文印刷用.pdf OK"; \
 	else \
@@ -109,6 +116,8 @@ ship:
 	if [ -f cover/print-saddle/spread-bleed-300dpi.pdf ]; then \
 		cp cover/print-saddle/spread-bleed-300dpi.pdf "dist/$${TITLE}_表紙_中綴じ用.pdf" && echo "$${TITLE}_表紙_中綴じ用.pdf OK"; \
 	fi; \
+	git add dist/"$${TITLE}"_*.pdf 2>/dev/null; \
+	git diff --cached --quiet || git commit -m "ship: $${TITLE}"; \
 	echo "---"; \
 	ls -1 dist/
 
