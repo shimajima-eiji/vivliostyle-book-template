@@ -103,8 +103,12 @@ def finalize_book_dist(book_path: Path, no_gray: bool = False):
         if book_pdf.exists():
             blanks = detect_blank_pages(book_pdf)
             if blanks:
-                print(f"  ⚠️  空白ページを検出: {blanks}")
-                print(f"      遊び紙が不要なら config.yml の titlepage/backcover 設定を確認してください。")
+                print(f"  ⚠️  空白ページを検出: {blanks} ({len(blanks)}ページ)")
+                print(f"      対処の優先順位:")
+                print(f"        1. コンテンツ追加（コラム・補足・索引など）で埋める")
+                print(f"        2. 既存ページのレイアウト見直しで圧縮し、空白を解消する")
+                print(f"        3. config.yml の titlepage/backcover 設定で遊び紙自体を削除する")
+                print(f"      空白のまま残すのは非推奨です。")
         return
 
     dist_dir = book_path / "dist"
