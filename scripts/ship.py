@@ -122,8 +122,16 @@ class BookProject:
 
         has_covers = front_pdf and front_pdf.exists() and back_pdf and back_pdf.exists()
 
-        # 製本版: 本文・表紙・裏表紙
-        shutil.copy2(body_pdf, bind_dir / "本文.pdf")
+        # 製本版: 本文（Vivliostyleの場合P1タイトルページをスキップ）
+        if self.fmt == "vivliostyle":
+            body_total = get_body_page_count(body_pdf)
+            subprocess.run(
+                ["qpdf", "--empty", "--pages", str(body_pdf), f"2-{body_total}", "--",
+                 str(bind_dir / "本文.pdf")],
+                check=True, capture_output=True,
+            )
+        else:
+            shutil.copy2(body_pdf, bind_dir / "本文.pdf")
         print(f"  製本版/本文.pdf OK")
 
         if has_covers:
@@ -151,15 +159,17 @@ class BookProject:
                 # ネットプリント: 表紙+白紙+本文(P2〜)+白紙+裏表紙（P1は表紙重複なのでスキップ）
                 self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=True)
             else:
-                # Vivliostyle: book-digital.pdfは表紙なし → 表紙+本文+裏表紙で電子版
+                # Vivliostyle: P1はタイトルページ（自動生成）なのでスキップ
+                body_pages = get_body_page_count(body_pdf)
+                body_range = f"2-{body_pages}" if body_pages > 1 else "1"
                 subprocess.run(
-                    ["qpdf", "--empty", "--pages", str(front_pdf), str(body_pdf), str(back_pdf), "--",
+                    ["qpdf", "--empty", "--pages", str(front_pdf), str(body_pdf), body_range, str(back_pdf), "--",
                      str(out_dir / "電子版.pdf")],
                     check=True, capture_output=True,
                 )
                 print(f"  電子版.pdf OK")
-                # ネットプリント: 表紙+白紙+本文(全ページ)+白紙+裏表紙
-                self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=False)
+                # ネットプリント: 表紙+白紙+本文(P2〜)+白紙+裏表紙
+                self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=True)
         else:
             # 表紙なし
             shutil.copy2(body_pdf, out_dir / "電子版.pdf")
@@ -232,18 +242,20 @@ class BookProject:
                 config_path.write_text(config_text, encoding="utf-8")
 
     def _build_vivliostyle(self, size: str):
-        # CSSの用紙サイズを一時変更
-        css_path = self.root / "theme" / "book.css"
-        css_text = css_path.read_text(encoding="utf-8") if css_path.exists() else None
+        # 一時変更するファイルの元テキストを保持
+        originals = {}
 
-        if css_text and size != "a5":
-            size_map = {"b5": "B5", "a4": "A4", "a6": "A6"}
-            target_size = size_map.get(size)
-            if not target_size:
-                print(f"  ⚠️ Vivliostyle {size.upper()}版は未対応です")
-                return
-            new_css = css_text.replace("size: A5;", f"size: {target_size};")
-            css_path.write_text(new_css, encoding="utf-8")
+        # CSS: 用紙サイズの一時変更
+        css_path = self.root / "theme" / "book.css"
+        if css_path.exists():
+            originals["css"] = (css_path, css_path.read_text(encoding="utf-8"))
+            if size != "a5":
+                size_map = {"b5": "B5", "a4": "A4", "a6": "A6"}
+                target_size = size_map.get(size)
+                if not target_size:
+                    print(f"  ⚠️ Vivliostyle {size.upper()}版は未対応です")
+                    return
+                css_path.write_text(originals["css"][1].replace("size: A5;", f"size: {target_size};"), encoding="utf-8")
 
         try:
             result = subprocess.run(
@@ -256,9 +268,9 @@ class BookProject:
                 return
             print(f"  ✅ Vivliostyleビルド完了 ({size.upper()})")
         finally:
-            # CSS を復元
-            if css_text and size != "a5":
-                css_path.write_text(css_text, encoding="utf-8")
+            # 全ファイルを復元
+            for key, (path, text) in originals.items():
+                path.write_text(text, encoding="utf-8")
 
     def _get_body_pdf(self) -> Path:
         if self.fmt == "review":
