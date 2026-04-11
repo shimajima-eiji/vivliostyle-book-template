@@ -17,13 +17,9 @@ import tempfile
 from pathlib import Path
 
 
-# --- 用紙サイズ定義 ---
-PAPER_SPECS = {
-    "a5": {"mm": (148, 210), "review_paper": "a5"},
-    "b5": {"mm": (182, 257), "review_paper": "b5"},
-    "a4": {"mm": (210, 297), "review_paper": "a4"},
-    "a6": {"mm": (105, 148), "review_paper": "a6"},
-}
+# 用紙サイズ定義（paper_sizes.py に集約）
+sys.path.insert(0, str(Path(__file__).parent))
+from paper_sizes import PAPER_SIZES as PAPER_SPECS
 
 
 def detect_format(book_root: Path) -> str:
@@ -110,6 +106,24 @@ class BookProject:
                     item.unlink()
         print(f"  🧹 dist/ クリーン完了 ({', '.join(s.upper() for s in sizes)})")
 
+    def _clean_intermediates(self):
+        """ビルド中間物を削除する。distの最終成果物とソースコードだけを残す。"""
+        removed = []
+        # Vivliostyle: dist/book-digital.pdf, dist/preface.pdf
+        for name in ["book-digital.pdf", "preface.pdf", "book-digital-adjusted.pdf",
+                      "book-digital-with-cover.pdf", "preface-fixed.pdf", "preface-test.pdf"]:
+            p = self.root / "dist" / name
+            if p.exists():
+                p.unlink()
+                removed.append(name)
+        # dist/_preview/ （スプレッドプレビュー）
+        preview = self.root / "dist" / "_preview"
+        if preview.exists():
+            shutil.rmtree(preview)
+            removed.append("_preview/")
+        if removed:
+            print(f"  🗑️ 中間物削除: {', '.join(removed)}")
+
     def ship(self, sizes: list[str], skip_build: bool = False):
         """指定サイズすべてをビルド→dist配置する"""
         print(f"📦 {self.title} ({self.fmt})")
@@ -133,7 +147,10 @@ class BookProject:
             print(f"  {base.upper()}版のbook.pdfを復元中...")
             self._build(base)
 
-        # Step 4: 生成物をcommit & push
+        # Step 4: 中間物を削除
+        self._clean_intermediates()
+
+        # Step 5: 生成物をcommit & push
         self._git_commit_push(f"ship: {self.title} ({','.join(s.upper() for s in sizes)})")
 
     def _ship_size(self, size: str, skip_build: bool):
@@ -260,11 +277,9 @@ class BookProject:
     def _build_vivliostyle(self, size: str):
         # 一時変更するファイルの元テキストを保持
         originals = {}
-        # JIS規格の実寸を使用（VivliostyleのB5はISO B5=176x250mmのため）
-        size_css = {"a5": "A5", "b5": "182mm 257mm", "a4": "A4", "a6": "A6"}
-        size_config = {"a5": "A5", "b5": "182mm 257mm", "a4": "A4", "a6": "A6"}
-        target_css = size_css.get(size, "A5")
-        target_config = size_config.get(size, "A5")
+        spec = PAPER_SPECS.get(size, PAPER_SPECS["a5"])
+        target_css = spec["css"]
+        target_config = spec["config"]
 
         if size != "a5":
             # CSS: 用紙サイズの一時変更
