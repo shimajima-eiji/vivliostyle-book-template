@@ -260,18 +260,24 @@ class BookProject:
     def _build_vivliostyle(self, size: str):
         # 一時変更するファイルの元テキストを保持
         originals = {}
+        # JIS規格の実寸を使用（VivliostyleのB5はISO B5=176x250mmのため）
+        size_css = {"a5": "A5", "b5": "182mm 257mm", "a4": "A4", "a6": "A6"}
+        size_config = {"a5": "A5", "b5": "182mm 257mm", "a4": "A4", "a6": "A6"}
+        target_css = size_css.get(size, "A5")
+        target_config = size_config.get(size, "A5")
 
-        # CSS: 用紙サイズの一時変更
-        css_path = self.root / "theme" / "book.css"
-        if css_path.exists():
-            originals["css"] = (css_path, css_path.read_text(encoding="utf-8"))
-            if size != "a5":
-                size_map = {"b5": "B5", "a4": "A4", "a6": "A6"}
-                target_size = size_map.get(size)
-                if not target_size:
-                    print(f"  ⚠️ Vivliostyle {size.upper()}版は未対応です")
-                    return
-                css_path.write_text(originals["css"][1].replace("size: A5;", f"size: {target_size};"), encoding="utf-8")
+        if size != "a5":
+            # CSS: 用紙サイズの一時変更
+            css_path = self.root / "theme" / "book.css"
+            if css_path.exists():
+                originals["css"] = (css_path, css_path.read_text(encoding="utf-8"))
+                css_path.write_text(originals["css"][1].replace("size: A5;", f"size: {target_css};"), encoding="utf-8")
+
+            # vivliostyle.config.js: sizeの一時変更
+            config_path = self.root / "vivliostyle.config.js"
+            if config_path.exists():
+                originals["config"] = (config_path, config_path.read_text(encoding="utf-8"))
+                config_path.write_text(originals["config"][1].replace("size: 'A5'", f"size: '{target_config}'"), encoding="utf-8")
 
         try:
             result = subprocess.run(
