@@ -1,5 +1,5 @@
 # Makefile.engine — 共通ビルドロジック（book-template 同梱）
-PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy" python
+PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy,pypdf,reportlab" python
 COVER_PNG  := cover/cover-book.png
 COVER_JPG  := cover/cover.jpeg
 BACK_PNG   := cover/back-book.png

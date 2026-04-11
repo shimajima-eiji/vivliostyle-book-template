@@ -57,8 +57,12 @@ def generate(style: dict, out_file: str = "cover/back-book.png") -> None:
         img = Image.alpha_composite(img, patterns.create_dot_grid(W, H, spacing=60, color=(255, 255, 255, 20)))
     if "waves" in p_style:
         img = Image.alpha_composite(img, patterns.create_math_waves(W, H, color=(255, 255, 255, 25)))
+    if "network" in p_style:
+        img = Image.alpha_composite(img, patterns.create_network(W, H, nodes=18, color=(255, 255, 255, 12)))
+    if "frame" in p_style:
+        img = Image.alpha_composite(img, patterns.create_frame_accent(W, H, color=(255, 255, 255, 30)))
     if "grain" in p_style:
-        img = Image.alpha_composite(img, patterns.create_grain(W, H, intensity=10))
+        img = Image.alpha_composite(img, patterns.create_grain(W, H, intensity=8))
 
     # 既存の図形描画
     draw = ImageDraw.Draw(img)
@@ -80,7 +84,11 @@ def generate(style: dict, out_file: str = "cover/back-book.png") -> None:
     if style.get("signature"):
         sig = style["signature"]
         font = load_font(sig.get("size", 28))
-        draw.text((W - 300, H - 100), sig["text"], font=font, fill=_to_rgba(sig.get("fill", (255,255,255,60))))
+        sig_text = sig["text"]
+        bbox = draw.textbbox((0, 0), sig_text, font=font)
+        text_w = bbox[2] - bbox[0]
+        # 右端から 80px のマージンを確保
+        draw.text((W - text_w - 80, H - 100), sig_text, font=font, fill=_to_rgba(sig.get("fill", (255,255,255,60))))
 
     img.convert("RGB").save(out_file, "PNG")
     print(f"Back cover MASTER generated with patterns: {out_file}")
