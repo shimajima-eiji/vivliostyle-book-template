@@ -87,6 +87,30 @@ cover: $(BOOK_PDF) $(COVER_PNG)
 	@qpdf --empty --pages $(COVER_PDF) $(BOOK_PDF) -- $(FINAL_PDF)
 	@echo "Final PDF generated: $(FINAL_PDF)"
 
+# ship — dist/ に目的別の明確な名前でファイルを集約する
+# 出力ファイルの意味:
+#   digital.pdf              電子配布用（表紙込み本文）
+#   print-body.pdf           印刷用本文（表紙なし）
+#   print-cover-wireless.pdf 印刷用表紙（くるみ製本）
+#   print-cover-saddle.pdf   印刷用表紙（中綴じ）
+.PHONY: ship
+ship:
+	@mkdir -p dist
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		cp book/book.pdf dist/print-body.pdf && echo "print-body.pdf <- book/book.pdf"; \
+	else \
+		cp dist/book-digital-with-cover.pdf dist/digital.pdf && echo "digital.pdf <- book-digital-with-cover.pdf"; \
+		cp dist/book-digital.pdf dist/print-body.pdf && echo "print-body.pdf <- book-digital.pdf"; \
+	fi
+	@if [ -f cover/print/spread-bleed-300dpi.pdf ]; then \
+		cp cover/print/spread-bleed-300dpi.pdf dist/print-cover-wireless.pdf && echo "print-cover-wireless.pdf <- cover/print/spread-bleed-300dpi.pdf"; \
+	fi
+	@if [ -f cover/print-saddle/spread-bleed-300dpi.pdf ]; then \
+		cp cover/print-saddle/spread-bleed-300dpi.pdf dist/print-cover-saddle.pdf && echo "print-cover-saddle.pdf <- cover/print-saddle/spread-bleed-300dpi.pdf"; \
+	fi
+	@echo "---"
+	@ls -1 dist/*.pdf
+
 .PHONY: clean
 clean:
 	rm -rf dist assets cover/print $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG) $(WRAP_PNG) $(COVER_JPG)
