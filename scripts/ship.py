@@ -135,18 +135,27 @@ class BookProject:
                     shutil.copy2(src, bind_dir / f"{name}.png")
                     print(f"  製本版/{name}.png OK")
 
-            # 電子版: 本文（表紙込み）+ 裏表紙
-            body_pages = get_body_page_count(body_pdf)
-            # Re:VIEWのbook.pdfはcoverimageで表紙込みなので、そのまま使う
-            subprocess.run(
-                ["qpdf", "--empty", "--pages", str(body_pdf), str(back_pdf), "--",
-                 str(out_dir / "電子版.pdf")],
-                check=True, capture_output=True,
-            )
-            print(f"  電子版.pdf OK")
-
-            # ネットプリント: 表紙+白紙+本文(P2〜)+白紙+裏表紙
-            self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf")
+            # 電子版・ネットプリント（format別）
+            if self.fmt == "review":
+                # Re:VIEW: book.pdfはcoverimageで表紙込み → 本文+裏表紙で電子版
+                subprocess.run(
+                    ["qpdf", "--empty", "--pages", str(body_pdf), str(back_pdf), "--",
+                     str(out_dir / "電子版.pdf")],
+                    check=True, capture_output=True,
+                )
+                print(f"  電子版.pdf OK")
+                # ネットプリント: 表紙+白紙+本文(P2〜)+白紙+裏表紙（P1は表紙重複なのでスキップ）
+                self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=True)
+            else:
+                # Vivliostyle: book-digital.pdfは表紙なし → 表紙+本文+裏表紙で電子版
+                subprocess.run(
+                    ["qpdf", "--empty", "--pages", str(front_pdf), str(body_pdf), str(back_pdf), "--",
+                     str(out_dir / "電子版.pdf")],
+                    check=True, capture_output=True,
+                )
+                print(f"  電子版.pdf OK")
+                # ネットプリント: 表紙+白紙+本文(全ページ)+白紙+裏表紙
+                self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=False)
         else:
             # 表紙なし
             shutil.copy2(body_pdf, out_dir / "電子版.pdf")
@@ -156,19 +165,19 @@ class BookProject:
         for p in sorted(out_dir.rglob("*.pdf")):
             print(f"  {p.relative_to(out_dir)}")
 
-    def _make_netprint(self, size: str, front_pdf: Path, body_pdf: Path, back_pdf: Path, out_path: Path):
-        """表紙+白紙+本文(P2〜)+白紙+裏表紙のネットプリントPDFを生成する"""
+    def _make_netprint(self, size: str, front_pdf: Path, body_pdf: Path, back_pdf: Path, out_path: Path, skip_first_page: bool = False):
+        """表紙+白紙+本文+白紙+裏表紙のネットプリントPDFを生成する"""
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             blank_path = Path(tmp.name)
         try:
             make_blank_pdf(blank_path, size)
             body_pages = get_body_page_count(body_pdf)
-            # P1=表紙(coverimage)なのでP2〜を本文として結合
+            body_range = f"2-{body_pages}" if skip_first_page else f"1-{body_pages}"
             subprocess.run(
                 ["qpdf", "--empty", "--pages",
                  str(front_pdf),
                  str(blank_path),
-                 str(body_pdf), f"2-{body_pages}",
+                 str(body_pdf), body_range,
                  str(blank_path),
                  str(back_pdf),
                  "--", str(out_path)],
