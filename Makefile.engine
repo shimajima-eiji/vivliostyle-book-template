@@ -1,5 +1,5 @@
 # Makefile.engine — 共通ビルドロジック（book-template 同梱）
-PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy,pypdf,reportlab" python
+PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy,pypdf,reportlab,pymupdf" python
 COVER_PNG  := cover/cover-book.png
 COVER_JPG  := cover/cover.jpeg
 BACK_PNG   := cover/back-book.png
@@ -165,6 +165,22 @@ ship-b5:
 	fi; \
 	echo "---"; \
 	ls -1 dist/*.pdf
+
+# preflight — dist/ 内の全PDFに対してプリフライトチェックを実行する
+# A5版とB5版を自動判別して検証する
+.PHONY: preflight
+preflight:
+	@echo "🔍 プリフライトチェック開始"
+	@BINDING=$$(grep 'binding:' book.yaml 2>/dev/null | head -1 | sed 's/.*binding: *["'"'"']*\([a-z]*\).*/\1/'); \
+	$(PYTHON) $(_ENGINE_DIR)/scripts/preflight-check.py dist/ --binding $${BINDING:-wireless}
+
+# spread — dist/ 内の全PDFの見開きプレビューを生成する
+.PHONY: spread
+spread:
+	@for pdf in dist/*_カラー.pdf; do \
+		[ -f "$$pdf" ] || continue; \
+		$(PYTHON) $(_ENGINE_DIR)/scripts/pdf-spread-screenshots.py "$$pdf"; \
+	done
 
 .PHONY: clean
 clean:
