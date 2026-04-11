@@ -52,7 +52,7 @@ def generate_spine(
     line_colors: list = None,
     prefer_base_color: bool = False,
 ):
-    W = int(spine_width_mm * 8.352) # 1754 / 210 = 8.352 px/mm
+    W = max(1, round(spine_width_mm * 300 / 25.4))  # 300dpi: mm → px
     if os.path.exists(bg_path) and not prefer_base_color:
         src = Image.open(bg_path).convert("RGBA")
         c = src.width // 2
