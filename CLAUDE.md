@@ -91,7 +91,7 @@ dist/
 - 現在採用している fix 入力は `cover/fix-ledger.md` に記録する
 - 一時物は `cover/_work/` に置く（git管理しない）
 
-詳細は `../.github-private/org-root/build-and-asset-guide.md` を参照。
+詳細はオーガニゼーションの運用ガイドを参照。
 
 ## 原稿ワークフロー
 

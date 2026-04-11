@@ -139,7 +139,7 @@ book-template/tools/  複数書籍で使う確認ツール
 - `copy` `final2` のような曖昧名を作らない
 - `_work` 直下にファイルを直置きしない
 - オーガニゼーション直下に `tmp/` や `tmp-*` を作らない
-- 詳細運用は [`.github-private/org-root/build-and-asset-guide.md`](../.github-private/org-root/build-and-asset-guide.md) を参照
+- 詳細運用はオーガニゼーションの運用ガイドを参照
 
 ## ライセンス
 
