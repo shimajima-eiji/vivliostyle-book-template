@@ -91,17 +91,30 @@ cover-print: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
 cover:
 	@echo "This target is deprecated. Please use scripts/rebuild-clean.sh or run 'python3 book-template/scripts/finalize-dist.py'"
 
-# ship — dist/ に書名入りの日本語ファイル名で4点セットを集約する
-# 現在の実装は scripts/finalize-dist.py に委譲されている。
+# ship — dist/ に書名入りの日本語ファイル名で成果物を集約する
+# Re:VIEW: book.pdf が表紙・裏表紙込みの完成版。そのままdistに配置する
+# Vivliostyle: finalize-dist.py で表紙結合・ページ調整を行う
 .PHONY: ship
 ship:
-	@echo "Executing finalize-dist.py --no-gray..."
-	@$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py --no-gray $(CURDIR)
+	@mkdir -p dist
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		TITLE=$$(grep '^title:' book.yaml | head -1 | sed 's/^title: *["'"'"']\(.*\)["'"'"']/\1/'); \
+		cp book/book.pdf "dist/$${TITLE}_電子版_カラー.pdf" && echo "$${TITLE}_電子版_カラー.pdf OK"; \
+		echo "---"; \
+		ls -1 dist/*.pdf; \
+	else \
+		echo "Executing finalize-dist.py --no-gray..."; \
+		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py --no-gray $(CURDIR); \
+	fi
 
 .PHONY: ship-gray
 ship-gray:
-	@echo "Executing finalize-dist.py..."
-	@$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR)
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		echo "Re:VIEW format does not support ship-gray (use ship instead)"; \
+	else \
+		echo "Executing finalize-dist.py..."; \
+		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR); \
+	fi
 
 .PHONY: clean
 clean:
