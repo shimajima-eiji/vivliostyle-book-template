@@ -65,7 +65,7 @@ def add_blank_pages_if_needed(input_pdf: Path, output_pdf: Path, binding):
     else:
         shutil.copy2(input_pdf, output_pdf)
 
-def finalize_book_dist(book_path: Path):
+def finalize_book_dist(book_path: Path, no_gray: bool = False):
     book_id = book_path.name
     print(f"\n📦 Finalizing Distribution: {book_id}")
 
@@ -109,13 +109,16 @@ def finalize_book_dist(book_path: Path):
     adjusted_color_body = dist_dir / "book-digital-adjusted.pdf"
     add_blank_pages_if_needed(color_body, adjusted_color_body, binding)
 
-    # 3. Create Grayscale Body via Ghostscript
-    gray_body = dist_dir / "book-print-gray.pdf"
-    try:
-        convert_to_grayscale(adjusted_color_body, gray_body)
-    except Exception as e:
-        print(f"  ⚠️ Grayscale conversion failed, using color: {e}")
-        shutil.copy2(adjusted_color_body, gray_body)
+    # 3. Create Grayscale Body via Ghostscript (if not no_gray)
+    if not no_gray:
+        gray_body = dist_dir / "book-print-gray.pdf"
+        try:
+            convert_to_grayscale(adjusted_color_body, gray_body)
+        except Exception as e:
+            print(f"  ⚠️ Grayscale conversion failed, using color: {e}")
+            shutil.copy2(adjusted_color_body, gray_body)
+    else:
+        gray_body = None
 
     # Destinations
     out_front = dist_dir / f"{title}_表紙.pdf"
@@ -134,7 +137,8 @@ def finalize_book_dist(book_path: Path):
     shutil.copy2(front_pdf, out_front)
     shutil.copy2(back_pdf, out_back)
     shutil.copy2(adjusted_color_body, out_body_color)
-    shutil.copy2(gray_body, out_body_gray)
+    if not no_gray:
+        shutil.copy2(gray_body, out_body_gray)
 
     # 4. Merge PDFs
     def merge_pdf(f, b, bk, out, label):
@@ -145,14 +149,20 @@ def finalize_book_dist(book_path: Path):
     try:
         # Merge Digital (All Color)
         merge_pdf(front_pdf, adjusted_color_body, back_pdf, out_full_digital, "Merged Digital")
-        # Merge Print (Cover Color, Body Gray)
-        merge_pdf(front_pdf, gray_body, back_pdf, out_full_print, "Merged Print")
+        # Merge Print (Cover Color, Body Gray) - only if not no_gray
+        if not no_gray:
+            merge_pdf(front_pdf, gray_body, back_pdf, out_full_print, "Merged Print")
     except Exception as e:
         print(f"  ❌ Failed to merge PDF: {e}")
 
 if __name__ == "__main__":
     import sys
     root = Path("/Users/nomuraya/workspace-ai/nomuraya-books")
+    
+    # --no-gray オプションを処理
+    no_gray = '--no-gray' in sys.argv
+    if no_gray:
+        sys.argv.remove('--no-gray')
     
     # 引数があればそれだけを処理、なければ全件
     if len(sys.argv) > 1:
@@ -162,7 +172,7 @@ if __name__ == "__main__":
             target_path = (root / target_name).resolve()
         
         if target_path.exists():
-            finalize_book_dist(target_path)
+            finalize_book_dist(target_path, no_gray)
         else:
             print(f"❌ Target not found: {target_path}")
     else:
@@ -174,4 +184,4 @@ if __name__ == "__main__":
         ]
         for b in books:
             if (root / b).exists():
-                finalize_book_dist(root / b)
+                finalize_book_dist(root / b, no_gray)

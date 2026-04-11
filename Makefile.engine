@@ -46,7 +46,11 @@ chapters:
 
 .PHONY: vivliostyle
 vivliostyle:
-	npx @vivliostyle/cli build
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		cd book && bundle exec review-pdfmaker config.yml; \
+	else \
+		npx @vivliostyle/cli build; \
+	fi
 
 .PHONY: cover-assets
 cover-assets: cover-img cover-back-img cover-spine-img cover-preview cover-print cover-dist-jpg
@@ -91,6 +95,11 @@ cover:
 # 現在の実装は scripts/finalize-dist.py に委譲されている。
 .PHONY: ship
 ship:
+	@echo "Executing finalize-dist.py --no-gray..."
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py --no-gray $(CURDIR)
+
+.PHONY: ship-gray
+ship-gray:
 	@echo "Executing finalize-dist.py..."
 	@$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR)
 
