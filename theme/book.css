@@ -11,8 +11,9 @@
   size: A5;
   margin-top: 20mm;
   margin-bottom: 22mm;
-  margin-left: 17mm;
-  margin-right: 17mm;
+  /* キンコーズ中綴じ: ノド（内側）20mm / 小口（外側）14mm */
+  margin-left: 20mm;  /* 右ページの内側 / 左ページの外側 */
+  margin-right: 14mm; /* 右ページの外側 / 左ページの内側（ただし :left で上書き） */
 }
 
 /* 表紙ページ: マージンなし・ノンブルなし */
@@ -39,7 +40,10 @@
 }
 
 /* 右ページ（奇数）: ノンブルを右下・章タイトルを右上 */
+/* ノド（内側）= 左、小口（外側）= 右 */
 @page :right {
+  margin-left: 20mm;  /* ノド */
+  margin-right: 14mm; /* 小口 */
   @top-right {
     content: string(chapter-title);
     font-size: 8pt;
@@ -56,7 +60,10 @@
 }
 
 /* 左ページ（偶数）: ノンブルを左下・書名を左上 */
+/* ノド（内側）= 右、小口（外側）= 左 */
 @page :left {
+  margin-left: 14mm;  /* 小口 */
+  margin-right: 20mm; /* ノド */
   @top-left {
     content: "{{BOOK_TITLE}}";
     font-size: 8pt;

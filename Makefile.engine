@@ -1,76 +1,147 @@
 # Makefile.engine — 共通ビルドロジック（book-template 同梱）
-# 各書籍の Makefile から include して使う:
-#
-#   ENGINE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../book-template
-#   include $(ENGINE_DIR)/Makefile.engine
-
-PYTHON     := uv run --with "pykakasi,pyyaml,pillow" python
+# Re:VIEW / Vivliostyle 両対応。book/config.yml の有無で format を自動検出する。
+# ship/preflight/spread は scripts/ship.py, scripts/preflight-check.py に委譲。
+PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy,pypdf,reportlab,pymupdf" python
 COVER_PNG  := cover/cover-book.png
-COVER_PDF  := /tmp/cover-page.pdf
-BOOK_PDF   := dist/book-digital.pdf
-FINAL_PDF  := dist/book-digital-with-cover.pdf
+COVER_JPG  := cover/cover.jpeg
+BACK_PNG   := cover/back-book.png
+SPINE_PNG  := cover/spine-book.png
+WRAP_PNG   := cover/wrap-preview.png
+PRINT_DIR  := cover/print
 
-# book-engine スクリプトの絶対パス（include 時点で確定する）
 _ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+_FORMAT := $(if $(wildcard $(CURDIR)/book/config.yml),review,vivliostyle)
 
-.PHONY: all build css index chapters cover-img vivliostyle cover clean help
+ifeq ($(_FORMAT),review)
+  BOOK_PDF := book.pdf
+else
+  BOOK_PDF := dist/book-digital.pdf
+endif
 
+PRINT_FRONT_PDF := $(PRINT_DIR)/front-trim-300dpi.pdf
+COVER_PDF  := dist/.cover-page-fallback.pdf
+FINAL_PDF  := dist/book-digital-with-cover.pdf
+KINKOS_PDF := dist/book-kinkos-booklet.pdf
+
+.PHONY: all
 all: build
 
-## フルビルド（CSS生成 → 索引 → PDF組版 → 表紙結合）
-build: css index vivliostyle cover
+.PHONY: build
+build: css index chapters vivliostyle cover-assets cover
 
-## book.yaml から theme/book.css を生成
+.PHONY: css
 css:
 	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-css.py
 
-## 索引を再生成（scripts/index-terms.yaml が変更されたとき）
+.PHONY: index
 index:
 	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-index.py
 
-## 章扉画像を再生成（assets/chapter-data.py が存在する場合のみ）
+.PHONY: chapters
 chapters:
-	@if [ -f assets/chapter-data.py ]; then \
-		$(PYTHON) assets/chapter-data.py; \
+	@if [ -f $(_ENGINE_DIR)/scripts/gen-chapter-images.py ]; then \
+		mkdir -p assets; \
+		BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-chapter-images.py; \
 	else \
-		echo "  章扉スクリプトなし（スキップ）"; \
+		echo "Skipping chapter image regeneration (script not present)"; \
 	fi
 
-## 表紙画像を再生成（cover/cover-data.py が存在する場合のみ）
-cover-img:
-	@if [ -f cover/cover-data.py ]; then \
-		$(PYTHON) cover/cover-data.py; \
-	else \
-		echo "  表紙スクリプトなし（スキップ）"; \
-	fi
-
-## Vivliostyle で PDF を組版
+.PHONY: vivliostyle
 vivliostyle:
-	npx @vivliostyle/cli build
-
-## 表紙を先頭に結合して最終 PDF を生成（カバー画像がない場合はそのままコピー）
-cover: $(BOOK_PDF)
-	@if [ -f "$(COVER_PNG)" ]; then \
-		magick convert -density 300 $(COVER_PNG) $(COVER_PDF) 2>/dev/null; true; \
-		pdfunite $(COVER_PDF) $(BOOK_PDF) $(FINAL_PDF); \
-		echo "✅ $(FINAL_PDF) （表紙あり）"; \
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		cd book && bundle exec review-pdfmaker config.yml; \
 	else \
-		cp $(BOOK_PDF) $(FINAL_PDF); \
-		echo "⚠️  カバー画像なし（$(COVER_PNG)）。$(FINAL_PDF) = 本文のみ"; \
+		npx @vivliostyle/cli build; \
 	fi
 
-## 中間ファイルを削除
-clean:
-	rm -f $(COVER_PDF) theme/book.css
+.PHONY: cover-assets
+cover-assets: cover-img cover-back-img cover-spine-img cover-preview cover-print cover-dist-jpg
 
-help:
-	@grep -E '^##' $(_ENGINE_DIR)/Makefile.engine | sed 's/^## /  /'
-	@echo ""
-	@echo "使い方:"
-	@echo "  make           # = make build"
-	@echo "  make build     # フルビルド（CSS→索引→組版→表紙結合）"
-	@echo "  make css       # book.yaml から book.css を再生成"
-	@echo "  make index     # 索引のみ再生成"
-	@echo "  make chapters  # 章扉画像を再生成"
-	@echo "  make cover-img # 表紙画像を再生成"
-	@echo "  make vivliostyle # 組版のみ"
+.PHONY: cover-dist-jpg
+cover-dist-jpg: $(COVER_PNG)
+	@echo "Generating digital distribution cover (JPEG)..."
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/gen-dist-cover.py $(CURDIR)
+
+.PHONY: cover-img
+cover-img:
+	@if [ ! -f cover/_fixed/front-source.png ] && [ -f cover/_candidates/cover-book.png ]; then \
+		echo "Restoring missing source from candidates..."; \
+		cp cover/_candidates/cover-book.png cover/_fixed/front-source.png; \
+	fi
+	@if [ -f cover/cover-data.py ]; then $(PYTHON) cover/cover-data.py; \
+	elif [ -f cover/cover-book.png ]; then echo "Using existing cover-book.png"; \
+	fi
+
+.PHONY: cover-back-img
+cover-back-img:
+	@if [ -f cover/back-cover-data.py ]; then $(PYTHON) cover/back-cover-data.py; fi
+
+.PHONY: cover-spine-img
+cover-spine-img:
+	@if [ -f cover/spine-data.py ]; then $(PYTHON) cover/spine-data.py; fi
+
+.PHONY: cover-preview
+cover-preview: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
+	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_wrap_preview.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(WRAP_PNG)
+
+.PHONY: cover-print
+cover-print: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
+	@mkdir -p $(PRINT_DIR)
+	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(PRINT_DIR)
+
+.PHONY: cover-b5-prep
+cover-b5-prep:
+	@echo "Generating B5 cover assets from source images via ImageMagick..."
+	@SRC_F=cover/_fixed/front-source.png; SRC_B=cover/back-book.png; \
+	if [ -f "$$SRC_F" ]; then \
+		magick "$$SRC_F" -filter Lanczos -resize 2150x3035! -unsharp 0x0.75+0.75+0.008 cover/_fixed/front-b5.png && echo "front-b5.png OK"; \
+	fi; \
+	if [ -f "$$SRC_B" ]; then \
+		magick "$$SRC_B" -filter Lanczos -resize 2150x3035! -unsharp 0x0.5+0.5+0.008 cover/_fixed/back-b5.png && echo "back-b5.png OK"; \
+	fi
+
+.PHONY: cover
+cover:
+	@echo "This target is deprecated. Use 'make ship' instead."
+
+# ship — scripts/ship.py に委譲。dist/{SIZE}/ にディレクトリ構成で配置する。
+# 構成:
+#   dist/A5/電子版.pdf, dist/A5/製本版/{本文,表紙,裏表紙,ネットプリント}.pdf
+#   dist/B5/ も同様
+.PHONY: ship
+ship:
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/ship.py $(CURDIR)
+
+.PHONY: ship-a5
+ship-a5:
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/ship.py $(CURDIR) --sizes a5
+
+.PHONY: ship-b5
+ship-b5:
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/ship.py $(CURDIR) --sizes b5
+
+# convert — manuscript/ の Markdown を book/ の Re:VIEW (.re) に変換する
+# 構造変換のみ。索引・注釈はLLMで後処理する。
+.PHONY: convert
+convert:
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/md2re.py manuscript/ book/
+
+# preflight — dist/ 内の全PDFに対してプリフライトチェックを実行する
+# A5版とB5版を自動判別して検証する
+.PHONY: preflight
+preflight:
+	@echo "🔍 プリフライトチェック開始"
+	@BINDING=$$(grep 'binding:' book.yaml 2>/dev/null | head -1 | sed 's/.*binding: *["'"'"']*\([a-z]*\).*/\1/' || echo wireless); \
+	$(PYTHON) $(_ENGINE_DIR)/scripts/preflight-check.py dist/ --binding $${BINDING:-wireless}
+
+# spread — dist/ 内の全PDFの見開きプレビューを生成する
+.PHONY: spread
+spread:
+	@for pdf in dist/*_カラー.pdf; do \
+		[ -f "$$pdf" ] || continue; \
+		$(PYTHON) $(_ENGINE_DIR)/scripts/pdf-spread-screenshots.py "$$pdf"; \
+	done
+
+.PHONY: clean
+clean:
+	rm -rf dist assets cover/print $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG) $(WRAP_PNG) $(COVER_JPG)

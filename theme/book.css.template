@@ -137,7 +137,7 @@ body {
 /* h1: 章タイトル — 右ページ（奇数ページ）から開始・柱更新 */
 h1 {
   string-set: chapter-title content(text);
-  break-before: right;
+  break-before: {{H1_BREAK_BEFORE}};
   font-family: var(--font-sans);
   font-size: 17pt;
   font-weight: bold;
@@ -358,6 +358,26 @@ hr.page-break {
   margin: 0;
 }
 
+.new-page {
+  break-before: page;
+}
+
+.signature {
+  text-align: right;
+  font-family: var(--font-sans);
+  font-size: 9pt;
+  margin-top: 1rem;
+}
+
+.signature-inline {
+  display: inline-block;
+  width: 100%;
+  text-align: right;
+  font-family: var(--font-sans);
+  font-size: 9pt;
+  margin-top: 0.6rem;
+}
+
 /* ──────────────────────────────────────────────
    9. リンク（印刷時URL表示）
 ────────────────────────────────────────────── */
@@ -479,6 +499,8 @@ a:has(img)::after {
   column-gap: 1.5em;
   font-size: 9pt;
 }
+
+{{INDEX_COMPACT_CSS}}
 
 /* ──────────────────────────────────────────────
    12. Vivliostyle 固有の補正
