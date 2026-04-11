@@ -120,6 +120,12 @@ ship-a5:
 ship-b5:
 	@$(PYTHON) $(_ENGINE_DIR)/scripts/ship.py $(CURDIR) --sizes b5
 
+# convert — manuscript/ の Markdown を book/ の Re:VIEW (.re) に変換する
+# 構造変換のみ。索引・注釈はLLMで後処理する。
+.PHONY: convert
+convert:
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/md2re.py manuscript/ book/
+
 # preflight — dist/ 内の全PDFに対してプリフライトチェックを実行する
 # A5版とB5版を自動判別して検証する
 .PHONY: preflight

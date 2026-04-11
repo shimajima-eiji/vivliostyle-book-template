@@ -93,9 +93,30 @@ dist/
 
 詳細は `../.github-private/org-root/build-and-asset-guide.md` を参照。
 
+## 原稿ワークフロー
+
+全書籍はMarkdownで執筆し、Re:VIEWに変換してビルドする（今後の標準）。
+
+```
+著者がmdで執筆 → make convert（md2re） → LLMで索引・注釈を後処理 → make ship
+```
+
+### manuscript/ と book/ の関係
+
+| ディレクトリ | 役割 | format |
+|------------|------|--------|
+| `manuscript/` | 原本（Markdown）。著者が直接編集する | 共通 |
+| `book/` | Re:VIEW変換版（.re）。`make convert`で生成 | Re:VIEW |
+
+- `manuscript/*.md` が原本。手動で`book/*.re`を編集しない
+- `make convert` で `manuscript/` → `book/` に変換（構造変換のみ）
+- 索引（`@<hidx>{}`）・注釈（`//note{}`）・コラム（`//column{}`）はLLMで後処理
+- Vivliostyleの場合は`manuscript/`をそのまま使う（変換不要）
+
 ## ビルド・配布コマンド
 
 ```bash
+make convert     # manuscript/ の md を book/ の .re に変換
 make build       # フルビルド（索引 → PDF → 表紙）
 make ship        # dist/ にA5+B5両方を生成（デフォルト）
 make ship-a5     # A5のみ
