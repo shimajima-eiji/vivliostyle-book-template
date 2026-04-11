@@ -134,7 +134,8 @@ define _ship_review
 		qpdf --empty --pages "$$BODY" "$$BACK_PDF" -- "$$OUT/電子版.pdf" && echo "  電子版.pdf OK"; \
 		BLANK="/tmp/_blank_$$SIZE.pdf"; \
 		$(PYTHON) -c $(_BLANK_SCRIPT) "$$BLANK" "$$SIZE"; \
-		qpdf --empty --pages "$$BLANK" "$$FRONT_PDF" "$$BODY" "$$BACK_PDF" "$$BLANK" -- "$$OUT/製本版/ネットプリント.pdf" && echo "  製本版/ネットプリント.pdf OK（白紙挿入済み）"; \
+		BODY_PAGES=$$($(PYTHON) -c "import fitz; d=fitz.open('$$BODY'); print(d.page_count)"); \
+		qpdf --empty --pages "$$FRONT_PDF" "$$BLANK" "$$BODY" 2-$$BODY_PAGES "$$BLANK" "$$BACK_PDF" -- "$$OUT/製本版/ネットプリント.pdf" && echo "  製本版/ネットプリント.pdf OK（白紙挿入済み）"; \
 		rm -f "$$BLANK"; \
 	else \
 		cp "$$BODY" "$$OUT/電子版.pdf" && echo "  電子版.pdf OK（表紙なし）"; \
