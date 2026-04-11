@@ -96,18 +96,19 @@ class BookProject:
             )
             print(f"  📌 {message}")
 
-    def _clean_dist(self):
-        """dist/ 内の生成物を削除する。"""
+    def _clean_dist(self, sizes: list[str]):
+        """指定サイズのdist/ディレクトリのみ削除する。"""
         dist = self.root / "dist"
+        for size in sizes:
+            size_dir = dist / size.upper()
+            if size_dir.exists():
+                shutil.rmtree(size_dir)
+        # dist直下の電子版.pdfなど旧ファイルも削除
         if dist.exists():
             for item in dist.iterdir():
-                if item.name.startswith("."):
-                    continue
-                if item.is_dir():
-                    shutil.rmtree(item)
-                elif item.suffix in (".pdf", ".png"):
+                if item.is_file() and item.suffix in (".pdf", ".png"):
                     item.unlink()
-            print("  🧹 dist/ クリーン完了")
+        print(f"  🧹 dist/ クリーン完了 ({', '.join(s.upper() for s in sizes)})")
 
     def ship(self, sizes: list[str], skip_build: bool = False):
         """指定サイズすべてをビルド→dist配置する"""
@@ -116,8 +117,8 @@ class BookProject:
         # Step 1: 現状をcommit & push（作業中の変更を保存）
         self._git_commit_push(f"ship: pre-build commit")
 
-        # Step 2: dist/ クリーン
-        self._clean_dist()
+        # Step 2: 指定サイズのdist/のみクリーン
+        self._clean_dist(sizes)
 
         # Step 3: ビルド & dist配置
         for size in sizes:
