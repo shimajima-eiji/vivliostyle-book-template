@@ -37,8 +37,12 @@ index:
 
 .PHONY: chapters
 chapters:
-	@mkdir -p assets
-	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-chapter-images.py
+	@if [ -f $(_ENGINE_DIR)/scripts/gen-chapter-images.py ]; then \
+		mkdir -p assets; \
+		BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-chapter-images.py; \
+	else \
+		echo "Skipping chapter image regeneration (script not present)"; \
+	fi
 
 .PHONY: vivliostyle
 vivliostyle:
@@ -80,44 +84,15 @@ cover-print: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
 	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(PRINT_DIR)
 
 .PHONY: cover
-cover: $(BOOK_PDF) $(COVER_PNG)
-	@mkdir -p dist
-	@if [ -f $(PRINT_FRONT_PDF) ]; then cp $(PRINT_FRONT_PDF) $(COVER_PDF); \
-	else magick convert -density 300 $(COVER_PNG) $(COVER_PDF); fi
-	@qpdf --empty --pages $(COVER_PDF) $(BOOK_PDF) -- $(FINAL_PDF)
-	@echo "Final PDF generated: $(FINAL_PDF)"
+cover:
+	@echo "This target is deprecated. Please use scripts/rebuild-clean.sh or run 'python3 book-template/scripts/finalize-dist.py'"
 
-# ship — dist/ に書名入りの日本語ファイル名でファイルを集約する
-# 運用フロー: 既存の日本語PDFをgit commitで保存 → 削除 → 再生成 → commit
-# 出力ファイルの意味:
-#   {書名}_電子版.pdf          電子配布用（表紙込み本文）
-#   {書名}_本文印刷用.pdf       印刷用本文（表紙なし）
-#   {書名}_表紙_くるみ製本用.pdf 印刷用表紙（くるみ製本）
-#   {書名}_表紙_中綴じ用.pdf    印刷用表紙（中綴じ）
+# ship — dist/ に書名入りの日本語ファイル名で4点セットを集約する
+# 現在の実装は scripts/finalize-dist.py に委譲されている。
 .PHONY: ship
 ship:
-	@mkdir -p dist
-	@TITLE=$$(python3 -c "import re; print(re.search(r'title:\s*[\"\'](.*?)[\"\']\s*$$', open('book.yaml').read(), re.M).group(1))"); \
-	OLD=$$(ls "dist/$${TITLE}"_*.pdf 2>/dev/null); \
-	if [ -n "$$OLD" ]; then \
-		TS=$$(date +%Y%m%d_%H%M%S); \
-		mkdir -p "dist/backup/$${TS}"; \
-		/bin/mv "dist/$${TITLE}"_*.pdf "dist/backup/$${TS}/" && echo "旧版を dist/backup/$${TS}/ に退避しました"; \
-	fi; \
-	if [ "$(_FORMAT)" = "review" ]; then \
-		cp book/book.pdf "dist/$${TITLE}_本文印刷用.pdf" && echo "$${TITLE}_本文印刷用.pdf OK"; \
-	else \
-		cp dist/book-digital-with-cover.pdf "dist/$${TITLE}_電子版.pdf" && echo "$${TITLE}_電子版.pdf OK"; \
-		cp dist/book-digital.pdf "dist/$${TITLE}_本文印刷用.pdf" && echo "$${TITLE}_本文印刷用.pdf OK"; \
-	fi; \
-	if [ -f cover/print/spread-bleed-300dpi.pdf ]; then \
-		cp cover/print/spread-bleed-300dpi.pdf "dist/$${TITLE}_表紙_くるみ製本用.pdf" && echo "$${TITLE}_表紙_くるみ製本用.pdf OK"; \
-	fi; \
-	if [ -f cover/print-saddle/spread-bleed-300dpi.pdf ]; then \
-		cp cover/print-saddle/spread-bleed-300dpi.pdf "dist/$${TITLE}_表紙_中綴じ用.pdf" && echo "$${TITLE}_表紙_中綴じ用.pdf OK"; \
-	fi; \
-	echo "---"; \
-	ls -1 dist/
+	@echo "Executing finalize-dist.py..."
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR)
 
 .PHONY: clean
 clean:
