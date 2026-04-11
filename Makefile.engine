@@ -108,13 +108,17 @@ cover:
 #   dist/A5/製本版/本文.pdf          本文のみ
 #   dist/A5/製本版/表紙.pdf          表1
 #   dist/A5/製本版/裏表紙.pdf        表4
-#   dist/A5/製本版/一括印刷.pdf      全ページ結合（ネットプリント用）
+#   dist/A5/製本版/ネットプリント.pdf  白紙+表紙+本文+裏表紙+白紙（裏移り防止）
 #
-# Re:VIEW: book.pdfから分離・結合
-# Vivliostyle: finalize-dist.py に委譲（今後ディレクトリ構成に移行予定）
+# `make ship` = A5+B5 両方。`make ship-a5` / `make ship-b5` = 個別。
 
-# 内部関数: _ship_review SIZE PAPER_OPT COVER_DIR BACK_PDF
-# ship と ship-b5 から呼ばれる共通処理
+# 白紙PDF生成（ネットプリントの裏移り防止用）
+# 引数: SIZE(A5/B5) → 対応サイズの白紙1ページPDFを生成
+_BLANK_SCRIPT = "import sys; from reportlab.pdfgen import canvas; from reportlab.lib.units import mm; \
+s={'A5':(148*mm,210*mm),'B5':(182*mm,257*mm),'A4':(210*mm,297*mm),'A6':(105*mm,148*mm)}; \
+c=canvas.Canvas(sys.argv[1],pagesize=s.get(sys.argv[2],(148*mm,210*mm))); c.showPage(); c.save()"
+
+# 内部関数: _ship_review SIZE COVER_DIR
 define _ship_review
 	SIZE=$(1); \
 	OUT="dist/$$SIZE"; \
@@ -128,7 +132,10 @@ define _ship_review
 		cp "$$BACK_PDF" "$$OUT/製本版/裏表紙.pdf" && echo "  製本版/裏表紙.pdf OK"; \
 		cp "$$BODY" "$$OUT/製本版/本文.pdf" && echo "  製本版/本文.pdf OK"; \
 		qpdf --empty --pages "$$BODY" "$$BACK_PDF" -- "$$OUT/電子版.pdf" && echo "  電子版.pdf OK"; \
-		qpdf --empty --pages "$$FRONT_PDF" "$$BODY" "$$BACK_PDF" -- "$$OUT/製本版/一括印刷.pdf" && echo "  製本版/一括印刷.pdf OK"; \
+		BLANK="/tmp/_blank_$$SIZE.pdf"; \
+		$(PYTHON) -c $(_BLANK_SCRIPT) "$$BLANK" "$$SIZE"; \
+		qpdf --empty --pages "$$BLANK" "$$FRONT_PDF" "$$BODY" "$$BACK_PDF" "$$BLANK" -- "$$OUT/製本版/ネットプリント.pdf" && echo "  製本版/ネットプリント.pdf OK（白紙挿入済み）"; \
+		rm -f "$$BLANK"; \
 	else \
 		cp "$$BODY" "$$OUT/電子版.pdf" && echo "  電子版.pdf OK（表紙なし）"; \
 		cp "$$BODY" "$$OUT/製本版/本文.pdf" && echo "  製本版/本文.pdf OK"; \
@@ -137,8 +144,9 @@ define _ship_review
 	find "$$OUT" -name '*.pdf' | sort
 endef
 
-.PHONY: ship
-ship:
+# ship-a5: A5版のみ
+.PHONY: ship-a5
+ship-a5:
 	@if [ "$(_FORMAT)" = "review" ]; then \
 		$(call _ship_review,A5,cover/print); \
 	else \
@@ -146,6 +154,7 @@ ship:
 		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py --no-gray $(CURDIR); \
 	fi
 
+# ship-b5: B5版のみ（Re:VIEWはconfig.ymlを一時切替してビルド）
 .PHONY: ship-b5
 ship-b5:
 	@if [ "$(_FORMAT)" = "review" ]; then \
@@ -162,12 +171,15 @@ ship-b5:
 			PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front "$$FRONT_B5" --back "$$BACK_B5" --spine $(SPINE_PNG) --out cover/print-b5; \
 		fi; \
 		$(call _ship_review,B5,cover/print-b5); \
+		echo "A5版のbook.pdfを復元中..."; \
+		cd book && PATH="/Library/TeX/texbin:$$PATH" bundle exec review-pdfmaker config.yml 2>&1 | tail -1 && cd ..; \
 	else \
 		echo "⚠️ Vivliostyle B5版は未対応です"; \
 	fi
 
-.PHONY: ship-all
-ship-all: ship ship-b5
+# ship: A5+B5 両方（デフォルト）
+.PHONY: ship
+ship: ship-a5 ship-b5
 
 # preflight — dist/ 内の全PDFに対してプリフライトチェックを実行する
 # A5版とB5版を自動判別して検証する
