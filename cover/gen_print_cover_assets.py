@@ -39,7 +39,7 @@ SPINE_WIDTH_RE = re.compile(r"spine_width_mm\s*=\s*([0-9]+(?:\.[0-9]+)?)")
 
 def load_panel(path: str | Path, size: tuple[int, int]) -> Image.Image:
     img = Image.open(path).convert("RGB")
-    return ImageOps.fit(img, size, Image.Resampling.LANCZOS)
+    return img.resize(size, Image.Resampling.LANCZOS)
 
 
 def extend_bleed(img: Image.Image, left: int = 0, right: int = 0, top: int = 0, bottom: int = 0) -> Image.Image:
