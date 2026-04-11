@@ -91,10 +91,11 @@ class BookProject:
                 continue
             self._ship_size(size, skip_build)
 
-        # 複数サイズをビルドした場合、最後にデフォルト(A5)のbook.pdfを復元
-        if self.fmt == "review" and len(sizes) > 1 and not skip_build:
-            print("  A5版のbook.pdfを復元中...")
-            self._build_review("a5")
+        # 複数サイズをビルドした場合、最初のサイズでbook.pdfを復元
+        if len(sizes) > 1 and not skip_build:
+            base = sizes[0]
+            print(f"  {base.upper()}版のbook.pdfを復元中...")
+            self._build(base)
 
     def _ship_size(self, size: str, skip_build: bool):
         print(f"\n  === {size.upper()} ===")
@@ -113,6 +114,9 @@ class BookProject:
             return
 
         cover_dir = self._get_cover_dir(size)
+        # cover/print-{size} がなければ _fixed/ の素材から自動生成
+        if cover_dir is None and size != "a5":
+            cover_dir = self._generate_cover_print(size)
         front_pdf = cover_dir / "front-trim-300dpi.pdf" if cover_dir else None
         back_pdf = cover_dir / "back-trim-300dpi.pdf" if cover_dir else None
 
@@ -228,11 +232,33 @@ class BookProject:
                 config_path.write_text(config_text, encoding="utf-8")
 
     def _build_vivliostyle(self, size: str):
-        if size != "a5":
-            print(f"  ⚠️ Vivliostyle {size.upper()}版は未対応です")
-            return
-        subprocess.run(["npx", "@vivliostyle/cli", "build"], cwd=self.root, check=True, capture_output=True)
-        print(f"  ✅ Vivliostyleビルド完了")
+        # CSSの用紙サイズを一時変更
+        css_path = self.root / "theme" / "book.css"
+        css_text = css_path.read_text(encoding="utf-8") if css_path.exists() else None
+
+        if css_text and size != "a5":
+            size_map = {"b5": "B5", "a4": "A4", "a6": "A6"}
+            target_size = size_map.get(size)
+            if not target_size:
+                print(f"  ⚠️ Vivliostyle {size.upper()}版は未対応です")
+                return
+            new_css = css_text.replace("size: A5;", f"size: {target_size};")
+            css_path.write_text(new_css, encoding="utf-8")
+
+        try:
+            result = subprocess.run(
+                ["npx", "@vivliostyle/cli", "build"],
+                cwd=self.root, capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                print(f"  ❌ Vivliostyleビルドエラー:")
+                print(result.stderr[-500:] if result.stderr else "")
+                return
+            print(f"  ✅ Vivliostyleビルド完了 ({size.upper()})")
+        finally:
+            # CSS を復元
+            if css_text and size != "a5":
+                css_path.write_text(css_text, encoding="utf-8")
 
     def _get_body_pdf(self) -> Path:
         if self.fmt == "review":
@@ -246,11 +272,38 @@ class BookProject:
             d = self.root / "cover" / f"print-{size}"
         return d if d.exists() else None
 
+    def _generate_cover_print(self, size: str) -> Path | None:
+        """_fixed/ のサイズ別素材から cover/print-{size} を生成する"""
+        fixed = self.root / "cover" / "_fixed"
+        front = fixed / f"front-{size}.png"
+        back = fixed / f"back-{size}.png"
+        spine = self.root / "cover" / "spine-book.png"
+
+        if not front.exists() or not back.exists():
+            print(f"  ⚠️ {size.upper()}版表紙素材がありません: _fixed/front-{size}.png, back-{size}.png")
+            print(f"      make cover-b5-prep で生成してください")
+            return None
+
+        out_dir = self.root / "cover" / f"print-{size}"
+        env = os.environ.copy()
+        env["PAPER_SIZE"] = size
+        gen_script = self.engine_dir / "cover" / "gen_print_cover_assets.py"
+
+        args = ["uv", "run", "--with", "pillow", "python3", str(gen_script),
+                "--front", str(front), "--back", str(back),
+                "--spine", str(spine), "--out", str(out_dir)]
+        result = subprocess.run(args, env=env, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"  ❌ {size.upper()}版表紙生成エラー: {result.stderr[-200:]}")
+            return None
+        print(f"  ✅ {size.upper()}版表紙生成完了")
+        return out_dir
+
 
 def main():
     parser = argparse.ArgumentParser(description="書籍ビルド・dist組立フレームワーク")
     parser.add_argument("book_root", nargs="?", default=".", help="書籍ルートディレクトリ")
-    parser.add_argument("--sizes", default="a5,b5", help="生成する用紙サイズ（カンマ区切り）")
+    parser.add_argument("--sizes", default="b5,a5", help="生成する用紙サイズ（カンマ区切り、先頭がベース）")
     parser.add_argument("--skip-build", action="store_true", help="ビルドをスキップしてdist組立のみ")
     args = parser.parse_args()
 
