@@ -81,10 +81,45 @@ class BookProject:
         self.binding = read_binding(self.root)
         self.engine_dir = Path(__file__).parent.parent.resolve()
 
+    def _git_commit_push(self, message: str):
+        """git add → commit → push。変更がなければスキップ。"""
+        subprocess.run(["git", "add", "-A"], cwd=self.root, capture_output=True)
+        result = subprocess.run(
+            ["git", "diff", "--cached", "--quiet"], cwd=self.root, capture_output=True,
+        )
+        if result.returncode != 0:
+            subprocess.run(
+                ["git", "commit", "-m", message], cwd=self.root, capture_output=True,
+            )
+            subprocess.run(
+                ["git", "push"], cwd=self.root, capture_output=True,
+            )
+            print(f"  📌 {message}")
+
+    def _clean_dist(self):
+        """dist/ 内の生成物を削除する。"""
+        dist = self.root / "dist"
+        if dist.exists():
+            for item in dist.iterdir():
+                if item.name.startswith("."):
+                    continue
+                if item.is_dir():
+                    shutil.rmtree(item)
+                elif item.suffix in (".pdf", ".png"):
+                    item.unlink()
+            print("  🧹 dist/ クリーン完了")
+
     def ship(self, sizes: list[str], skip_build: bool = False):
         """指定サイズすべてをビルド→dist配置する"""
         print(f"📦 {self.title} ({self.fmt})")
 
+        # Step 1: 現状をcommit & push（作業中の変更を保存）
+        self._git_commit_push(f"ship: pre-build commit")
+
+        # Step 2: dist/ クリーン
+        self._clean_dist()
+
+        # Step 3: ビルド & dist配置
         for size in sizes:
             if size not in PAPER_SPECS:
                 print(f"  ⚠️ 未対応の用紙サイズ: {size}")
@@ -96,6 +131,9 @@ class BookProject:
             base = sizes[0]
             print(f"  {base.upper()}版のbook.pdfを復元中...")
             self._build(base)
+
+        # Step 4: 生成物をcommit & push
+        self._git_commit_push(f"ship: {self.title} ({','.join(s.upper() for s in sizes)})")
 
     def _ship_size(self, size: str, skip_build: bool):
         print(f"\n  === {size.upper()} ===")
