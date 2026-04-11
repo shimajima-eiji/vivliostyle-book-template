@@ -65,13 +65,51 @@ def add_blank_pages_if_needed(input_pdf: Path, output_pdf: Path, binding):
     else:
         shutil.copy2(input_pdf, output_pdf)
 
+def detect_format(book_path: Path) -> str:
+    """Re:VIEW か Vivliostyle かを判定する"""
+    if (book_path / "book" / "config.yml").exists():
+        return "review"
+    return "vivliostyle"
+
+
+def detect_blank_pages(pdf_path: Path) -> list[int]:
+    """空白ページ（テキストも画像もないページ）を検出する"""
+    try:
+        from pypdf import PdfReader
+    except ImportError:
+        return []
+    reader = PdfReader(pdf_path)
+    blanks = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        has_images = len(page.get("/Resources", {}).get("/XObject", {}) or {}) > 0
+        if not text.strip() and not has_images:
+            blanks.append(i + 1)
+    return blanks
+
+
 def finalize_book_dist(book_path: Path, no_gray: bool = False):
     book_id = book_path.name
     print(f"\n📦 Finalizing Distribution: {book_id}")
 
+    # Re:VIEW形式の場合は案内を出して終了
+    fmt = detect_format(book_path)
+    if fmt == "review":
+        print(f"  ℹ️  Re:VIEW形式です。表紙・裏表紙はconfig.ymlで管理されます。")
+        print(f"  ℹ️  ビルド: cd book && bundle exec review-pdfmaker config.yml")
+        print(f"  ℹ️  配布:  make ship （book.pdf をそのまま dist/ に配置します）")
+        # 遊び紙（空白ページ）検出
+        book_pdf = book_path / "book" / "book.pdf"
+        if book_pdf.exists():
+            blanks = detect_blank_pages(book_pdf)
+            if blanks:
+                print(f"  ⚠️  空白ページを検出: {blanks}")
+                print(f"      遊び紙が不要なら config.yml の titlepage/backcover 設定を確認してください。")
+        return
+
     dist_dir = book_path / "dist"
     cover_dir = book_path / "cover"
-    
+
     # 1. Get proper title and binding from book.yaml first
     yaml_path = book_path / "book.yaml"
     title = "book"
