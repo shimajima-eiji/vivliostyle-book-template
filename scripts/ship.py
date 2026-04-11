@@ -100,8 +100,10 @@ class BookProject:
     def _ship_size(self, size: str, skip_build: bool):
         print(f"\n  === {size.upper()} ===")
         out_dir = self.root / "dist" / size.upper()
-        bind_dir = out_dir / "製本版"
-        bind_dir.mkdir(parents=True, exist_ok=True)
+        pdf_dir = out_dir / "製本版" / "pdf"
+        raw_dir = out_dir / "製本版" / "raw"
+        pdf_dir.mkdir(parents=True, exist_ok=True)
+        raw_dir.mkdir(parents=True, exist_ok=True)
 
         # ビルド
         if not skip_build:
@@ -134,30 +136,30 @@ class BookProject:
                 pages_args += [str(preface_pdf), f"2-{preface_pages}"]
             pages_args += [str(body_pdf), f"2-{body_total}"]
             subprocess.run(
-                ["qpdf", "--empty", "--pages"] + pages_args + ["--", str(bind_dir / "本文.pdf")],
+                ["qpdf", "--empty", "--pages"] + pages_args + ["--", str(pdf_dir / "本文.pdf")],
                 check=True, capture_output=True,
             )
-            print(f"  製本版/本文.pdf OK")
+            print(f"  製本版/pdf/本文.pdf OK")
         else:
             # Re:VIEW: book.pdfをそのまま
-            shutil.copy2(body_pdf, bind_dir / "本文.pdf")
-            print(f"  製本版/本文.pdf OK")
+            shutil.copy2(body_pdf, pdf_dir / "本文.pdf")
+            print(f"  製本版/pdf/本文.pdf OK")
 
         if has_covers:
-            shutil.copy2(front_pdf, bind_dir / "表紙.pdf")
-            shutil.copy2(back_pdf, bind_dir / "裏表紙.pdf")
-            print(f"  製本版/表紙.pdf OK")
-            print(f"  製本版/裏表紙.pdf OK")
+            shutil.copy2(front_pdf, pdf_dir / "表紙.pdf")
+            shutil.copy2(back_pdf, pdf_dir / "裏表紙.pdf")
+            print(f"  製本版/pdf/表紙.pdf OK")
+            print(f"  製本版/pdf/裏表紙.pdf OK")
 
-            # 画像ファイル（PNG）も配置
+            # 画像ファイル（PNG）をraw/に配置
             for name, src_name in [("表紙", "front-trim-300dpi.png"), ("裏表紙", "back-trim-300dpi.png"), ("背表紙", "spine-trim-300dpi.png")]:
                 src = cover_dir / src_name
                 if src.exists():
-                    shutil.copy2(src, bind_dir / f"{name}.png")
-                    print(f"  製本版/{name}.png OK")
+                    shutil.copy2(src, raw_dir / f"{name}.png")
+                    print(f"  製本版/raw/{name}.png OK")
 
             # 電子版: 表紙 + 本文.pdf + 裏表紙
-            body_for_merge = bind_dir / "本文.pdf"
+            body_for_merge = pdf_dir / "本文.pdf"
             subprocess.run(
                 ["qpdf", "--empty", "--pages", str(front_pdf), str(body_for_merge), str(back_pdf), "--",
                  str(out_dir / "電子版.pdf")],
@@ -166,7 +168,7 @@ class BookProject:
             print(f"  電子版.pdf OK")
 
             # ネットプリント: 表紙+白紙+本文+白紙+裏表紙
-            self._make_netprint_simple(size, front_pdf, body_for_merge, back_pdf, bind_dir / "ネットプリント.pdf")
+            self._make_netprint_simple(size, front_pdf, body_for_merge, back_pdf, pdf_dir / "ネットプリント.pdf")
         else:
             # 表紙なし
             shutil.copy2(body_pdf, out_dir / "電子版.pdf")
