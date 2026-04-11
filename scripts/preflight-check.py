@@ -160,7 +160,7 @@ def run_check(pdf_path: Path, paper: str, binding: str) -> bool:
     doc = fitz.open(pdf_path)
     w_mm, h_mm = PAPER_SPECS[paper]
     gutter_min = GUTTER_MIN[binding]
-    is_body_only = "本文のみ" in pdf_path.name
+    is_body_only = "本文のみ" in pdf_path.name or "本文" == pdf_path.stem or "製本版" in str(pdf_path)
 
     print(f"📋 プリフライトチェック: {pdf_path.name}")
     print(f"   用紙: {paper.upper()} ({w_mm}x{h_mm}mm), 製本: {binding}")
@@ -211,9 +211,26 @@ def main():
 
     target = Path(args.pdf_or_dir)
 
-    # ディレクトリが渡された場合は中の *_カラー.pdf を全て検索
+    # ディレクトリが渡された場合:
+    #   新構成: dist/A5/電子版.pdf, dist/B5/電子版.pdf
+    #   旧構成: dist/*_カラー.pdf（フォールバック）
     if target.is_dir():
-        pdfs = sorted(target.glob("*_カラー*.pdf"))
+        pdfs = []
+        # 新構成: dist/{SIZE}/電子版.pdf と dist/{SIZE}/製本版/本文.pdf
+        for size_dir in sorted(target.iterdir()):
+            if not size_dir.is_dir() or size_dir.name.startswith(("_", ".")):
+                continue
+            digital = size_dir / "電子版.pdf"
+            body = size_dir / "製本版" / "本文.pdf"
+            if digital.exists():
+                pdfs.append((digital, size_dir.name.lower()))
+            if body.exists():
+                pdfs.append((body, size_dir.name.lower()))
+        # フォールバック: 旧構成
+        if not pdfs:
+            for p in sorted(target.glob("*_カラー*.pdf")):
+                paper_guess = "b5" if "_B5" in p.name or "/B5/" in str(p) else "a5"
+                pdfs.append((p, paper_guess))
         if not pdfs:
             print(f"ERROR: {target} にチェック対象のPDFがありません")
             sys.exit(1)
@@ -221,14 +238,12 @@ def main():
         if not target.exists():
             print(f"ERROR: {target} が見つかりません")
             sys.exit(1)
-        pdfs = [target]
+        paper_guess = args.paper or ("b5" if "B5" in target.name or "/B5/" in str(target) else "a5")
+        pdfs = [(target, paper_guess)]
 
     all_passed = True
-    for pdf_path in pdfs:
-        # 用紙サイズの自動判別
-        paper = args.paper
-        if paper is None:
-            paper = "b5" if "_B5" in pdf_path.name else "a5"
+    for pdf_path, auto_paper in pdfs:
+        paper = args.paper or auto_paper
 
         ok = run_check(pdf_path, paper, args.binding)
         if not ok:

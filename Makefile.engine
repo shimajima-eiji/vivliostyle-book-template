@@ -102,46 +102,54 @@ cover-b5-prep:
 cover:
 	@echo "This target is deprecated. Please use scripts/rebuild-clean.sh or run 'python3 book-template/scripts/finalize-dist.py'"
 
-# ship — dist/ に書名入りの日本語ファイル名で成果物を集約する
-# Re:VIEW: book.pdf（表紙込み・裏表紙なし）に裏表紙をqpdfで後付けする
-# Vivliostyle: finalize-dist.py で表紙結合・ページ調整を行う
+# ship — dist/{SIZE}/ にディレクトリ構成で成果物を配置する
+# 構成:
+#   dist/A5/電子版.pdf              表紙+本文+裏表紙
+#   dist/A5/製本版/本文.pdf          本文のみ
+#   dist/A5/製本版/表紙.pdf          表1
+#   dist/A5/製本版/裏表紙.pdf        表4
+#   dist/A5/製本版/一括印刷.pdf      全ページ結合（ネットプリント用）
+#
+# Re:VIEW: book.pdfから分離・結合
+# Vivliostyle: finalize-dist.py に委譲（今後ディレクトリ構成に移行予定）
+
+# 内部関数: _ship_review SIZE PAPER_OPT COVER_DIR BACK_PDF
+# ship と ship-b5 から呼ばれる共通処理
+define _ship_review
+	SIZE=$(1); \
+	OUT="dist/$$SIZE"; \
+	mkdir -p "$$OUT/製本版"; \
+	FRONT_PDF="$(2)/front-trim-300dpi.pdf"; \
+	BACK_PDF="$(2)/back-trim-300dpi.pdf"; \
+	BODY="book/book.pdf"; \
+	echo "📦 $$SIZE版を配置"; \
+	if [ -f "$$FRONT_PDF" ] && [ -f "$$BACK_PDF" ]; then \
+		cp "$$FRONT_PDF" "$$OUT/製本版/表紙.pdf" && echo "  製本版/表紙.pdf OK"; \
+		cp "$$BACK_PDF" "$$OUT/製本版/裏表紙.pdf" && echo "  製本版/裏表紙.pdf OK"; \
+		cp "$$BODY" "$$OUT/製本版/本文.pdf" && echo "  製本版/本文.pdf OK"; \
+		qpdf --empty --pages "$$BODY" "$$BACK_PDF" -- "$$OUT/電子版.pdf" && echo "  電子版.pdf OK"; \
+		qpdf --empty --pages "$$FRONT_PDF" "$$BODY" "$$BACK_PDF" -- "$$OUT/製本版/一括印刷.pdf" && echo "  製本版/一括印刷.pdf OK"; \
+	else \
+		cp "$$BODY" "$$OUT/電子版.pdf" && echo "  電子版.pdf OK（表紙なし）"; \
+		cp "$$BODY" "$$OUT/製本版/本文.pdf" && echo "  製本版/本文.pdf OK"; \
+	fi; \
+	echo "---"; \
+	find "$$OUT" -name '*.pdf' | sort
+endef
+
 .PHONY: ship
 ship:
-	@mkdir -p dist
 	@if [ "$(_FORMAT)" = "review" ]; then \
-		TITLE=$$(grep '^title:' book.yaml | head -1 | sed 's/^title: *["'"'"']\(.*\)["'"'"']/\1/'); \
-		BACK_PDF="cover/print/back-trim-300dpi.pdf"; \
-		if [ -f "$$BACK_PDF" ]; then \
-			qpdf --empty --pages book/book.pdf "$$BACK_PDF" -- "dist/$${TITLE}_電子版_カラー.pdf" && echo "$${TITLE}_電子版_カラー.pdf OK（裏表紙付き）"; \
-		else \
-			cp book/book.pdf "dist/$${TITLE}_電子版_カラー.pdf" && echo "$${TITLE}_電子版_カラー.pdf OK（裏表紙なし）"; \
-		fi; \
-		echo "---"; \
-		ls -1 dist/*.pdf; \
+		$(call _ship_review,A5,cover/print); \
 	else \
 		echo "Executing finalize-dist.py --no-gray..."; \
 		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py --no-gray $(CURDIR); \
 	fi
 
-.PHONY: ship-gray
-ship-gray:
-	@if [ "$(_FORMAT)" = "review" ]; then \
-		echo "Re:VIEW format does not support ship-gray (use ship instead)"; \
-	else \
-		echo "Executing finalize-dist.py..."; \
-		$(PYTHON) $(_ENGINE_DIR)/scripts/finalize-dist.py $(CURDIR); \
-	fi
-
-# ship-b5 — B5版を生成して dist/ に配置する
-# Re:VIEW: config.yml の paper を一時的にb5に変更してビルド→裏表紙結合→元に戻す
-# Vivliostyle: 未対応（CSS変更が必要）
-# 表紙は PAPER_SIZE=b5 で print_specs を切り替えて再生成する
 .PHONY: ship-b5
 ship-b5:
-	@mkdir -p dist
-	@TITLE=$$(grep '^title:' book.yaml | head -1 | sed 's/^title: *["'"'"']\(.*\)["'"'"']/\1/'); \
-	echo "📦 B5版を生成: $${TITLE}"; \
-	if [ "$(_FORMAT)" = "review" ]; then \
+	@if [ "$(_FORMAT)" = "review" ]; then \
+		echo "📦 B5版をビルド"; \
 		sed -i '' 's/paper=a5/paper=b5/g' book/config.yml; \
 		if [ -f book/images/cover-b5.pdf ]; then \
 			sed -i '' 's/coverimage: cover-a5.pdf/coverimage: cover-b5.pdf/' book/config.yml; \
@@ -150,28 +158,23 @@ ship-b5:
 		sed -i '' 's/paper=b5/paper=a5/g' book/config.yml; \
 		sed -i '' 's/coverimage: cover-b5.pdf/coverimage: cover-a5.pdf/' book/config.yml; \
 		FRONT_B5="cover/_fixed/front-b5.png"; BACK_B5="cover/_fixed/back-b5.png"; \
-		if [ ! -f "$$FRONT_B5" ] || [ ! -f "$$BACK_B5" ]; then \
-			echo "⚠️ B5版表紙がありません: make cover-b5-prep で生成してください"; exit 1; \
+		if [ -f "$$FRONT_B5" ] && [ -f "$$BACK_B5" ]; then \
+			PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front "$$FRONT_B5" --back "$$BACK_B5" --spine $(SPINE_PNG) --out cover/print-b5; \
 		fi; \
-		PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front "$$FRONT_B5" --back "$$BACK_B5" --spine $(SPINE_PNG) --out cover/print-b5; \
-		BACK_PDF="cover/print-b5/back-trim-300dpi.pdf"; \
-		if [ -f "$$BACK_PDF" ]; then \
-			qpdf --empty --pages book/book.pdf "$$BACK_PDF" -- "dist/$${TITLE}_電子版_カラー_B5.pdf" && echo "$${TITLE}_電子版_カラー_B5.pdf OK"; \
-		else \
-			cp book/book.pdf "dist/$${TITLE}_電子版_カラー_B5.pdf" && echo "$${TITLE}_電子版_カラー_B5.pdf OK（裏表紙なし）"; \
-		fi; \
+		$(call _ship_review,B5,cover/print-b5); \
 	else \
-		echo "⚠️ Vivliostyle B5版は未対応です（CSSの変更が必要）"; \
-	fi; \
-	echo "---"; \
-	ls -1 dist/*.pdf
+		echo "⚠️ Vivliostyle B5版は未対応です"; \
+	fi
+
+.PHONY: ship-all
+ship-all: ship ship-b5
 
 # preflight — dist/ 内の全PDFに対してプリフライトチェックを実行する
 # A5版とB5版を自動判別して検証する
 .PHONY: preflight
 preflight:
 	@echo "🔍 プリフライトチェック開始"
-	@BINDING=$$(grep 'binding:' book.yaml 2>/dev/null | head -1 | sed 's/.*binding: *["'"'"']*\([a-z]*\).*/\1/'); \
+	@BINDING=$$(grep 'binding:' book.yaml 2>/dev/null | head -1 | sed 's/.*binding: *["'"'"']*\([a-z]*\).*/\1/' || echo wireless); \
 	$(PYTHON) $(_ENGINE_DIR)/scripts/preflight-check.py dist/ --binding $${BINDING:-wireless}
 
 # spread — dist/ 内の全PDFの見開きプレビューを生成する
