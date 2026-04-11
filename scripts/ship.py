@@ -122,22 +122,24 @@ class BookProject:
 
         has_covers = front_pdf and front_pdf.exists() and back_pdf and back_pdf.exists()
 
-        # 製本版: 本文
+        # --- Vivliostyle: preface独立ビルド + 本文からP1除去 ---
+        preface_pdf = None
         if self.fmt == "vivliostyle":
-            # P1（タイトルページ）と実質空白ページ（極小画像のみ）を除去
-            keep_pages = self._get_content_pages(body_pdf)
-            page_range = ",".join(str(p) for p in keep_pages)
+            preface_pdf = self._build_vivliostyle_preface(size)
+            # 本文: preface.pdf(P2〜) + book-digital.pdf(P2〜)
+            preface_pages = get_body_page_count(preface_pdf) if preface_pdf else 0
+            body_total = get_body_page_count(body_pdf)
+            pages_args = []
+            if preface_pdf and preface_pages > 1:
+                pages_args += [str(preface_pdf), f"2-{preface_pages}"]
+            pages_args += [str(body_pdf), f"2-{body_total}"]
             subprocess.run(
-                ["qpdf", "--empty", "--pages", str(body_pdf), page_range, "--",
-                 str(bind_dir / "本文.pdf")],
+                ["qpdf", "--empty", "--pages"] + pages_args + ["--", str(bind_dir / "本文.pdf")],
                 check=True, capture_output=True,
             )
-            removed = get_body_page_count(body_pdf) - len(keep_pages)
-            if removed:
-                print(f"  製本版/本文.pdf OK（{removed}ページ除去: タイトル/空白）")
-            else:
-                print(f"  製本版/本文.pdf OK")
+            print(f"  製本版/本文.pdf OK")
         else:
+            # Re:VIEW: book.pdfをそのまま
             shutil.copy2(body_pdf, bind_dir / "本文.pdf")
             print(f"  製本版/本文.pdf OK")
 
@@ -154,29 +156,17 @@ class BookProject:
                     shutil.copy2(src, bind_dir / f"{name}.png")
                     print(f"  製本版/{name}.png OK")
 
-            # 電子版・ネットプリント（format別）
-            if self.fmt == "review":
-                # Re:VIEW: book.pdfはcoverimageで表紙込み → 本文+裏表紙で電子版
-                subprocess.run(
-                    ["qpdf", "--empty", "--pages", str(body_pdf), str(back_pdf), "--",
-                     str(out_dir / "電子版.pdf")],
-                    check=True, capture_output=True,
-                )
-                print(f"  電子版.pdf OK")
-                # ネットプリント: 表紙+白紙+本文(P2〜)+白紙+裏表紙（P1は表紙重複なのでスキップ）
-                self._make_netprint(size, front_pdf, body_pdf, back_pdf, bind_dir / "ネットプリント.pdf", skip_first_page=True)
-            else:
-                # Vivliostyle: タイトルページ・空白ページを除去して結合
-                keep_pages = self._get_content_pages(body_pdf)
-                page_range = ",".join(str(p) for p in keep_pages)
-                subprocess.run(
-                    ["qpdf", "--empty", "--pages", str(front_pdf), str(body_pdf), page_range, str(back_pdf), "--",
-                     str(out_dir / "電子版.pdf")],
-                    check=True, capture_output=True,
-                )
-                print(f"  電子版.pdf OK")
-                # ネットプリント: 表紙+白紙+本文(コンテンツのみ)+白紙+裏表紙
-                self._make_netprint_with_range(size, front_pdf, body_pdf, page_range, back_pdf, bind_dir / "ネットプリント.pdf")
+            # 電子版: 表紙 + 本文.pdf + 裏表紙
+            body_for_merge = bind_dir / "本文.pdf"
+            subprocess.run(
+                ["qpdf", "--empty", "--pages", str(front_pdf), str(body_for_merge), str(back_pdf), "--",
+                 str(out_dir / "電子版.pdf")],
+                check=True, capture_output=True,
+            )
+            print(f"  電子版.pdf OK")
+
+            # ネットプリント: 表紙+白紙+本文+白紙+裏表紙
+            self._make_netprint_simple(size, front_pdf, body_for_merge, back_pdf, bind_dir / "ネットプリント.pdf")
         else:
             # 表紙なし
             shutil.copy2(body_pdf, out_dir / "電子版.pdf")
@@ -185,28 +175,6 @@ class BookProject:
         print(f"  ---")
         for p in sorted(out_dir.rglob("*.pdf")):
             print(f"  {p.relative_to(out_dir)}")
-
-    def _make_netprint(self, size: str, front_pdf: Path, body_pdf: Path, back_pdf: Path, out_path: Path, skip_first_page: bool = False):
-        """表紙+白紙+本文+白紙+裏表紙のネットプリントPDFを生成する"""
-        with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
-            blank_path = Path(tmp.name)
-        try:
-            make_blank_pdf(blank_path, size)
-            body_pages = get_body_page_count(body_pdf)
-            body_range = f"2-{body_pages}" if skip_first_page else f"1-{body_pages}"
-            subprocess.run(
-                ["qpdf", "--empty", "--pages",
-                 str(front_pdf),
-                 str(blank_path),
-                 str(body_pdf), body_range,
-                 str(blank_path),
-                 str(back_pdf),
-                 "--", str(out_path)],
-                check=True, capture_output=True,
-            )
-            print(f"  製本版/ネットプリント.pdf OK（白紙挿入済み）")
-        finally:
-            blank_path.unlink(missing_ok=True)
 
     def _build(self, size: str):
         if self.fmt == "review":
@@ -279,29 +247,8 @@ class BookProject:
             for key, (path, text) in originals.items():
                 path.write_text(text, encoding="utf-8")
 
-    def _get_content_pages(self, pdf_path: Path) -> list[int]:
-        """Vivliostyleの本文PDFからコンテンツページのみを抽出する。
-        P1（タイトルページ）と実質空白ページ（テキストなし+極小画像のみ）を除外。"""
-        import fitz
-        doc = fitz.open(pdf_path)
-        keep = []
-        for i in range(doc.page_count):
-            if i == 0:
-                continue  # P1=タイトルページは常にスキップ
-            p = doc[i]
-            text = p.get_text().strip()
-            imgs = p.get_images()
-            # テキストなし+画像が全て16px以下 = 実質空白
-            if not text and imgs and all(im[2] <= 16 and im[3] <= 16 for im in imgs):
-                continue
-            if not text and not imgs:
-                continue
-            keep.append(i + 1)  # qpdfは1-indexed
-        doc.close()
-        return keep
-
-    def _make_netprint_with_range(self, size: str, front_pdf: Path, body_pdf: Path, page_range: str, back_pdf: Path, out_path: Path):
-        """ページ範囲指定版のネットプリントPDF生成"""
+    def _make_netprint_simple(self, size: str, front_pdf: Path, body_pdf: Path, back_pdf: Path, out_path: Path):
+        """表紙+白紙+本文+白紙+裏表紙のネットプリントPDF。Re:VIEW/Vivliostyle共通。"""
         with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
             blank_path = Path(tmp.name)
         try:
@@ -310,7 +257,7 @@ class BookProject:
                 ["qpdf", "--empty", "--pages",
                  str(front_pdf),
                  str(blank_path),
-                 str(body_pdf), page_range,
+                 str(body_pdf),
                  str(blank_path),
                  str(back_pdf),
                  "--", str(out_path)],
@@ -319,6 +266,39 @@ class BookProject:
             print(f"  製本版/ネットプリント.pdf OK（白紙挿入済み）")
         finally:
             blank_path.unlink(missing_ok=True)
+
+    def _build_vivliostyle_preface(self, size: str) -> Path | None:
+        """Vivliostyleのpreface（はじめに）を独立ビルドする。
+        vivliostyle.preface.js が存在する場合のみ実行。"""
+        config = self.root / "vivliostyle.preface.js"
+        if not config.exists():
+            return None
+
+        # CSSの用紙サイズを一時変更
+        css_path = self.root / "theme" / "preface.css"
+        css_text = None
+        if css_path.exists() and size != "a5":
+            css_text = css_path.read_text(encoding="utf-8")
+            size_map = {"b5": "B5", "a4": "A4", "a6": "A6"}
+            target = size_map.get(size)
+            if target:
+                css_path.write_text(css_text.replace("size: A5;", f"size: {target};"), encoding="utf-8")
+
+        try:
+            result = subprocess.run(
+                ["npx", "@vivliostyle/cli", "build", "-c", str(config)],
+                cwd=self.root, capture_output=True, text=True,
+            )
+            if result.returncode != 0:
+                print(f"  ⚠️ はじめにビルドエラー: {result.stderr[-200:]}")
+                return None
+            print(f"  ✅ はじめにビルド完了")
+        finally:
+            if css_text:
+                css_path.write_text(css_text, encoding="utf-8")
+
+        preface_pdf = self.root / "dist" / "preface.pdf"
+        return preface_pdf if preface_pdf.exists() else None
 
     def _get_body_pdf(self) -> Path:
         if self.fmt == "review":
