@@ -50,6 +50,7 @@ workspace/
 make build        # フルビルド（索引 → PDF → 表紙結合）
 make vivliostyle  # 組版のみ（原稿確認用）
 make index        # 索引のみ再生成
+make kinkos-packet # キンコーズ A5 中綴じ向け PDF を生成
 ```
 
 生成物は `dist/book-digital-with-cover.pdf`。
@@ -68,19 +69,26 @@ cover:
   subtitle_line1: ""
   subtitle_line2: ""
   font_size_title: 110
-  bg_image: "cover/bg_draft.png"
+  bg_image: "cover/_fixed/front-source.png"  # 採用元を置く場合の canonical front source
 
 css:
   chapter_image: false  # 章扉画像を使う場合は true
+
+print:
+  binding: "wireless"  # "saddle" は中綴じ
+  # printer: "kinkos"  # キンコーズ手刷り前提なら指定
 ```
 
 ## 表紙・章扉画像
 
-Pillowで生成する場合は以下のスクリプトを書籍側に置く：
+表紙まわりは `make cover-assets` で一括更新する。
+Pillowや固定画像を使う場合は以下のスクリプトを書籍側に置く：
 
 | ファイル | 用途 |
 |---------|------|
-| `cover/cover-data.py` | 表紙画像生成（`cover/cover-book.png` を出力） |
+| `cover/cover-data.py` | front 生成（`cover/cover-book.png` を出力） |
+| `cover/back-cover-data.py` | back 生成（`cover/back-book.png` を出力） |
+| `cover/spine-data.py` | spine 生成（`cover/spine-book.png` を出力） |
 | `assets/chapter-data.py` | 章扉画像生成（`assets/chapter-XX.png` を出力） |
 
 各スクリプトは `book-template` のベーススクリプトを参照する：
@@ -91,6 +99,21 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent / "book-template" / "cover"))
 from gen_cover_base import generate
 ```
+
+`book.yaml` の `cover.bg_image` は、`cover/_fixed/front-source.png` のような canonical source をメモする用途で使ってよい。
+実際の描画ロジックは各repoの `cover/*-data.py` が持つ。
+
+## キンコーズ運用
+
+キンコーズで A5 手刷りする前提なら、運用は次の形に寄せる。
+
+- `print.binding: "saddle"`
+- `print.printer: "kinkos"`
+- 表紙印刷アセットは `cover/print/*` の `300dpi` 系を正とする
+- 冊子として持ち込む PDF は `make kinkos-packet` で生成する
+
+`make kinkos-packet` は `dist/book-kinkos-booklet.pdf` を生成する。
+Vivliostyle 本は `front + body + blanks + back`、Re:VIEW 本は `coverimage` が本文に入っている場合 `body + blanks + back` として組み立てる。
 
 ## 表紙アセットの置き場ルール
 

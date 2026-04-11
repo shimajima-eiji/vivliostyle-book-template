@@ -9,7 +9,7 @@
   from gen_cover_base import generate
 
   generate(
-      bg_path="cover/bg_draft.png",
+      bg_path="cover/_fixed/front-source.png",
       title_line1="書名行1",
       title_line2="書名行2",
       subtitle_line1="サブタイトル1",
@@ -25,7 +25,13 @@ import platform
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-W, H = 1240, 1754
+try:
+    import sys, os
+    sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+    import print_specs
+    W, H = print_specs.TRIM_W_PX, print_specs.TRIM_H_PX
+except:
+    W, H = 1748, 2480 # Fallback 300dpi
 
 
 def load_font(size: int, bold: bool = False) -> ImageFont.FreeTypeFont:

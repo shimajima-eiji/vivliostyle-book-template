@@ -1,152 +1,92 @@
 # Makefile.engine — 共通ビルドロジック（book-template 同梱）
-# 各書籍の Makefile から include して使う:
-#
-#   ENGINE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))../book-template
-#   include $(ENGINE_DIR)/Makefile.engine
-
-PYTHON     := uv run --with "pykakasi,pyyaml,pillow" python
+PYTHON     := uv run --with "pykakasi,pyyaml,pillow,numpy" python
 COVER_PNG  := cover/cover-book.png
+COVER_JPG  := cover/cover.jpeg
 BACK_PNG   := cover/back-book.png
 SPINE_PNG  := cover/spine-book.png
 WRAP_PNG   := cover/wrap-preview.png
 PRINT_DIR  := cover/print
+
+_ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
+_FORMAT := $(if $(wildcard $(CURDIR)/book/config.yml),review,vivliostyle)
+
+ifeq ($(_FORMAT),review)
+  BOOK_PDF := book.pdf
+else
+  BOOK_PDF := dist/book-digital.pdf
+endif
+
 PRINT_FRONT_PDF := $(PRINT_DIR)/front-trim-300dpi.pdf
 COVER_PDF  := dist/.cover-page-fallback.pdf
 FINAL_PDF  := dist/book-digital-with-cover.pdf
+KINKOS_PDF := dist/book-kinkos-booklet.pdf
 
-# book-engine スクリプトの絶対パス（include 時点で確定する）
-_ENGINE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
-
-# フォーマット自動検出: book/config.yml があれば Re:VIEW、なければ Vivliostyle
-_FORMAT := $(if $(wildcard $(CURDIR)/book/config.yml),review,vivliostyle)
-
-# フォーマット別 PDF 出力パス
-ifeq ($(_FORMAT),review)
-BOOK_PDF := $(CURDIR)/book/book.pdf
-else
-BOOK_PDF := dist/book-digital.pdf
-endif
-
-.PHONY: all build css index chapters cover-img cover-back-img cover-spine-img cover-preview cover-print cover-assets vivliostyle review cover validate clean help
-
+.PHONY: all
 all: build
 
-## フルビルド（フォーマット自動検出: Re:VIEW or Vivliostyle）
-ifeq ($(_FORMAT),review)
-build: index chapters cover-assets review cover
-else
+.PHONY: build
 build: css index chapters vivliostyle cover-assets cover
-endif
 
-## book.yaml から theme/book.css を生成（Vivliostyle 用）
+.PHONY: css
 css:
 	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-css.py
 
-## 索引を再生成（scripts/index-terms.yaml が変更されたとき）
+.PHONY: index
 index:
 	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-index.py
 
-## 章扉画像を再生成（assets/chapter-data.py が存在する場合のみ）
+.PHONY: chapters
 chapters:
-	@if [ -f assets/chapter-data.py ]; then \
-		$(PYTHON) assets/chapter-data.py; \
-	else \
-		echo "  章扉スクリプトなし（スキップ）"; \
-	fi
+	@mkdir -p assets
+	BOOK_ROOT=$(CURDIR) $(PYTHON) $(_ENGINE_DIR)/scripts/gen-chapter-images.py
 
-## 表紙画像を再生成（cover/cover-data.py が存在する場合のみ）
-cover-img:
-	@if [ -f cover/cover-data.py ]; then \
-		$(PYTHON) cover/cover-data.py; \
-	else \
-		echo "  表紙スクリプトなし（スキップ）"; \
-	fi
-
-## 裏表紙画像を再生成（cover/back-cover-data.py が存在する場合のみ）
-cover-back-img:
-	@if [ -f cover/back-cover-data.py ]; then \
-		$(PYTHON) cover/back-cover-data.py; \
-	else \
-		echo "  裏表紙スクリプトなし（スキップ）"; \
-	fi
-
-## 背表紙画像を再生成（cover/spine-data.py が存在する場合のみ）
-cover-spine-img:
-	@if [ -f cover/spine-data.py ]; then \
-		$(PYTHON) cover/spine-data.py; \
-	else \
-		echo "  背表紙スクリプトなし（スキップ）"; \
-	fi
-
-## 表1-4の確認用プレビューを再生成
-cover-preview:
-	@if [ -f "$(COVER_PNG)" ] && [ -f "$(BACK_PNG)" ] && [ -f "$(SPINE_PNG)" ]; then \
-		$(PYTHON) $(_ENGINE_DIR)/cover/gen_wrap_preview.py --front "$(COVER_PNG)" --spine "$(SPINE_PNG)" --back "$(BACK_PNG)" --out "$(WRAP_PNG)"; \
-	else \
-		echo "  wrap preview に必要な画像が揃っていないためスキップ"; \
-	fi
-
-## 印刷用アセットを再生成（front/back/spine が揃っている場合のみ）
-cover-print:
-	@if [ -f "$(COVER_PNG)" ] && [ -f "$(BACK_PNG)" ] && [ -f "$(SPINE_PNG)" ] && [ -f cover/spine-data.py ]; then \
-		$(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py "$(CURDIR)"; \
-	else \
-		echo "  印刷用アセットに必要な画像または設定が不足しているためスキップ"; \
-	fi
-
-## 表紙関連アセットを一括更新
-cover-assets: cover-img cover-back-img cover-spine-img cover-preview cover-print
-
-## Re:VIEW で PDF を組版（book/config.yml が存在する場合に有効）
-review:
-	@echo "📖 Re:VIEW でビルド中..."
-	@export PATH="$$HOME/.rbenv/shims:$$HOME/.rbenv/bin:$$PATH"; \
-	cd $(CURDIR)/book && review-pdfmaker config.yml
-	@echo "✅ $(BOOK_PDF)"
-
-## Vivliostyle で PDF を組版
+.PHONY: vivliostyle
 vivliostyle:
 	npx @vivliostyle/cli build
 
-## 表紙を先頭に結合して最終 PDF を生成（印刷用 front-trim PDF を優先）
-cover: $(BOOK_PDF)
-	@mkdir -p dist
-	@if [ -f "$(PRINT_FRONT_PDF)" ]; then \
-		pdfunite "$(PRINT_FRONT_PDF)" "$(BOOK_PDF)" "$(FINAL_PDF)"; \
-		echo "✅ $(FINAL_PDF) （印刷用表紙PDFあり）"; \
-	elif [ -f "$(COVER_PNG)" ]; then \
-		magick convert -density 300 "$(COVER_PNG)" "$(COVER_PDF)"; \
-		pdfunite "$(COVER_PDF)" "$(BOOK_PDF)" "$(FINAL_PDF)"; \
-		echo "✅ $(FINAL_PDF) （表紙PNGから結合）"; \
-	else \
-		cp "$(BOOK_PDF)" "$(FINAL_PDF)"; \
-		echo "⚠️  カバー画像なし（$(COVER_PNG)）。$(FINAL_PDF) = 本文のみ"; \
+.PHONY: cover-assets
+cover-assets: cover-img cover-back-img cover-spine-img cover-preview cover-print cover-dist-jpg
+
+.PHONY: cover-dist-jpg
+cover-dist-jpg: $(COVER_PNG)
+	@echo "Generating digital distribution cover (JPEG)..."
+	@$(PYTHON) $(_ENGINE_DIR)/scripts/gen-dist-cover.py $(CURDIR)
+
+.PHONY: cover-img
+cover-img:
+	@if [ ! -f cover/_fixed/front-source.png ] && [ -f cover/_candidates/cover-book.png ]; then \
+		echo "Restoring missing source from candidates..."; \
+		cp cover/_candidates/cover-book.png cover/_fixed/front-source.png; \
+	fi
+	@if [ -f cover/cover-data.py ]; then $(PYTHON) cover/cover-data.py; \
+	elif [ -f cover/cover-book.png ]; then echo "Using existing cover-book.png"; \
 	fi
 
-## ビルド成果物を検証（ページ数・索引品質）
-validate:
-	@echo "🔍 品質チェック中..."
-	@BOOK_ROOT=$(CURDIR) BOOK_FORMAT=$(_FORMAT) $(PYTHON) $(_ENGINE_DIR)/scripts/validate.py
+.PHONY: cover-back-img
+cover-back-img:
+	@if [ -f cover/back-cover-data.py ]; then $(PYTHON) cover/back-cover-data.py; fi
 
-## 中間ファイルを削除
+.PHONY: cover-spine-img
+cover-spine-img:
+	@if [ -f cover/spine-data.py ]; then $(PYTHON) cover/spine-data.py; fi
+
+.PHONY: cover-preview
+cover-preview: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
+	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_wrap_preview.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(WRAP_PNG)
+
+.PHONY: cover-print
+cover-print: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
+	@mkdir -p $(PRINT_DIR)
+	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(PRINT_DIR)
+
+.PHONY: cover
+cover: $(BOOK_PDF) $(COVER_PNG)
+	@mkdir -p dist
+	@if [ -f $(PRINT_FRONT_PDF) ]; then cp $(PRINT_FRONT_PDF) $(COVER_PDF); \
+	else magick convert -density 300 $(COVER_PNG) $(COVER_PDF); fi
+	@qpdf --empty --pages $(COVER_PDF) $(BOOK_PDF) -- $(FINAL_PDF)
+	@echo "Final PDF generated: $(FINAL_PDF)"
+
+.PHONY: clean
 clean:
-	rm -f $(COVER_PDF) theme/book.css
-
-help:
-	@grep -E '^##' $(_ENGINE_DIR)/Makefile.engine | sed 's/^## /  /'
-	@echo ""
-	@echo "使い方:"
-	@echo "  make           # = make build"
-	@echo "  make build     # フルビルド（フォーマット自動検出: $(_FORMAT)）"
-	@echo "  make review    # Re:VIEW でビルド（book/config.yml 必須）"
-	@echo "  make vivliostyle # Vivliostyle でビルド"
-	@echo "  make css       # book.yaml から book.css を再生成（Vivliostyle 用）"
-	@echo "  make index     # 索引のみ再生成"
-	@echo "  make chapters  # 章扉画像を再生成"
-	@echo "  make cover-img # 表紙画像を再生成"
-	@echo "  make cover-back-img # 裏表紙画像を再生成"
-	@echo "  make cover-spine-img # 背表紙画像を再生成"
-	@echo "  make cover-preview # 表1-4の確認用プレビューを再生成"
-	@echo "  make cover-print # 300dpiの印刷用表紙アセットを再生成"
-	@echo "  make cover-assets # 表紙関連アセットを一括更新"
-	@echo "  make validate  # ビルド成果物の品質チェック"
+	rm -rf dist assets cover/print $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG) $(WRAP_PNG) $(COVER_JPG)

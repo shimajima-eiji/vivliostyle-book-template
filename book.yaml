@@ -7,7 +7,7 @@ cover:
   subtitle_line1: ""
   subtitle_line2: ""
   font_size_title: 110
-  bg_image: "cover/bg_draft.png"
+  bg_image: "cover/_fixed/front-source.png"  # cover-data.py が採用元を参照する場合の canonical front source
 
 css:
   chapter_image: false
@@ -16,6 +16,7 @@ css:
 # 注: 表紙（表1〜表4）・遊び紙は本文ページ数とは別カウント（印刷所が管理）
 print:
   binding: "wireless"  # 製本方式: "wireless"=無線綴じ（2の倍数）, "saddle"=中綴じ（4の倍数必須）
+  # printer: "kinkos"  # キンコーズ手刷り前提なら指定
 
   # 印刷費見積もり管理（数字は各印刷所の公式サイトで毎回確認すること）
   # ツールによる自動計算は行わない（APIなし・価格改定の追跡が不可能なため）

@@ -49,6 +49,7 @@ make build       # フルビルド（索引 → PDF → 表紙結合）
 make vivliostyle # PDF組版のみ（原稿確認用）
 make index       # 索引のみ再生成
 make validate    # 品質チェック（ページ数・索引・印刷費参考値）
+make kinkos-packet # キンコーズ A5 中綴じ向け PDF を生成
 make clean       # dist/ を削除
 ```
 

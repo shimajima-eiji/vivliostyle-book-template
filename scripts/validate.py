@@ -91,6 +91,9 @@ NOISE = {
 errors: list[str] = []
 warnings: list[str] = []
 
+if printer == "kinkos" and binding != "saddle":
+    warnings.append("キンコーズ手刷り前提なら print.binding は 'saddle' を推奨します")
+
 # ── 1. ページ数チェック ───────────────────────────────────────
 if not BOOK_PDF.exists():
     errors.append(f"PDF が見つかりません: {BOOK_PDF}（make build を先に実行してください）")
@@ -113,6 +116,14 @@ else:
                     )
                 else:
                     print(f"  ✅ ページ数: {pages}p（{binding_label}・OK）")
+                    if printer == "kinkos" and binding == "saddle":
+                        packet_pages = pages + 2
+                        blanks = (-packet_pages) % 4
+                        final_pages = packet_pages + blanks
+                        print(
+                            f"  🖨️  Kinko's packet: front/back を足すと {packet_pages}p、"
+                            f"空白 {blanks}p で合計 {final_pages}p"
+                        )
                 break
     except (subprocess.CalledProcessError, FileNotFoundError):
         warnings.append("pdfinfo が見つかりません。ページ数チェックをスキップします（brew install poppler）")

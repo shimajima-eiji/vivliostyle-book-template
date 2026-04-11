@@ -20,27 +20,21 @@
 from __future__ import annotations
 
 import argparse
-import math
 from pathlib import Path
 import re
 
 from PIL import Image, ImageDraw, ImageOps
-
-
-DPI = 300
-PX_PER_MM = DPI / 25.4
-TRIM_W_MM = 148.0
-TRIM_H_MM = 210.0
-BLEED_MM = 3.0
-
-TRIM_W_PX = round(TRIM_W_MM * PX_PER_MM)
-TRIM_H_PX = round(TRIM_H_MM * PX_PER_MM)
-BLEED_PX = math.ceil(BLEED_MM * PX_PER_MM)
+from print_specs import (
+    BLEED_MM,
+    BLEED_PX,
+    PRINT_DPI,
+    TRIM_H_MM,
+    TRIM_H_PX,
+    TRIM_W_MM,
+    TRIM_W_PX,
+    mm_to_px,
+)
 SPINE_WIDTH_RE = re.compile(r"spine_width_mm\s*=\s*([0-9]+(?:\.[0-9]+)?)")
-
-
-def mm_to_px(mm: float) -> int:
-    return max(1, round(mm * PX_PER_MM))
 
 
 def load_panel(path: str | Path, size: tuple[int, int]) -> Image.Image:
@@ -70,8 +64,8 @@ def extend_bleed(img: Image.Image, left: int = 0, right: int = 0, top: int = 0, 
 
 def save_png_and_pdf(img: Image.Image, png_path: Path, pdf_path: Path) -> None:
     png_path.parent.mkdir(parents=True, exist_ok=True)
-    img.save(png_path, "PNG", dpi=(DPI, DPI))
-    img.save(pdf_path, "PDF", resolution=float(DPI))
+    img.save(png_path, "PNG", dpi=(PRINT_DPI, PRINT_DPI))
+    img.save(pdf_path, "PDF", resolution=float(PRINT_DPI))
 
 
 def make_spread_guide(spread: Image.Image, out_path: Path, spine_trim_px: int) -> None:
@@ -91,12 +85,12 @@ def make_spread_guide(spread: Image.Image, out_path: Path, spine_trim_px: int) -
     draw.rectangle((trim_x0, trim_y0, trim_x1 - 1, trim_y1 - 1), outline=guide_color, width=2)
     draw.line((back_end, trim_y0, back_end, trim_y1), fill=fold_color, width=2)
     draw.line((spine_end, trim_y0, spine_end, trim_y1), fill=fold_color, width=2)
-    guide.save(out_path, "PNG", dpi=(DPI, DPI))
+    guide.save(out_path, "PNG", dpi=(PRINT_DPI, PRINT_DPI))
 
 
 def write_manifest(out_dir: Path, spine_width_mm: float, spine_trim_px: int, spread_size: tuple[int, int]) -> None:
     manifest = f"""print spec
-dpi: {DPI}
+dpi: {PRINT_DPI}
 trim_mm: {TRIM_W_MM} x {TRIM_H_MM}
 trim_px: {TRIM_W_PX} x {TRIM_H_PX}
 bleed_mm: {BLEED_MM}
