@@ -128,6 +128,13 @@ class BookProject:
             print(f"  製本版/表紙.pdf OK")
             print(f"  製本版/裏表紙.pdf OK")
 
+            # 画像ファイル（PNG）も配置
+            for name, src_name in [("表紙", "front-trim-300dpi.png"), ("裏表紙", "back-trim-300dpi.png"), ("背表紙", "spine-trim-300dpi.png")]:
+                src = cover_dir / src_name
+                if src.exists():
+                    shutil.copy2(src, bind_dir / f"{name}.png")
+                    print(f"  製本版/{name}.png OK")
+
             # 電子版: 本文（表紙込み）+ 裏表紙
             body_pages = get_body_page_count(body_pdf)
             # Re:VIEWのbook.pdfはcoverimageで表紙込みなので、そのまま使う
