@@ -87,6 +87,17 @@ cover-print: $(COVER_PNG) $(BACK_PNG) $(SPINE_PNG)
 	@mkdir -p $(PRINT_DIR)
 	@$(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --spine $(SPINE_PNG) --back $(BACK_PNG) --out $(PRINT_DIR)
 
+.PHONY: cover-b5-prep
+cover-b5-prep:
+	@echo "Generating B5 cover assets from source images via ImageMagick..."
+	@SRC_F=cover/_fixed/front-source.png; SRC_B=cover/back-book.png; \
+	if [ -f "$$SRC_F" ]; then \
+		magick "$$SRC_F" -filter Lanczos -resize 2150x3035! -unsharp 0x0.75+0.75+0.008 cover/_fixed/front-b5.png && echo "front-b5.png OK"; \
+	fi; \
+	if [ -f "$$SRC_B" ]; then \
+		magick "$$SRC_B" -filter Lanczos -resize 2150x3035! -unsharp 0x0.5+0.5+0.008 cover/_fixed/back-b5.png && echo "back-b5.png OK"; \
+	fi
+
 .PHONY: cover
 cover:
 	@echo "This target is deprecated. Please use scripts/rebuild-clean.sh or run 'python3 book-template/scripts/finalize-dist.py'"
@@ -134,7 +145,11 @@ ship-b5:
 		sed -i '' 's/paper=a5/paper=b5/g' book/config.yml; \
 		cd book && PATH="/Library/TeX/texbin:$$PATH" bundle exec review-pdfmaker config.yml && cd ..; \
 		sed -i '' 's/paper=b5/paper=a5/g' book/config.yml; \
-		PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front $(COVER_PNG) --back $(BACK_PNG) --spine $(SPINE_PNG) --out cover/print-b5; \
+		FRONT_B5="cover/_fixed/front-b5.png"; BACK_B5="cover/_fixed/back-b5.png"; \
+		if [ ! -f "$$FRONT_B5" ] || [ ! -f "$$BACK_B5" ]; then \
+			echo "⚠️ B5版表紙がありません: make cover-b5-prep で生成してください"; exit 1; \
+		fi; \
+		PAPER_SIZE=b5 $(PYTHON) $(_ENGINE_DIR)/cover/gen_print_cover_assets.py --front "$$FRONT_B5" --back "$$BACK_B5" --spine $(SPINE_PNG) --out cover/print-b5; \
 		BACK_PDF="cover/print-b5/back-trim-300dpi.pdf"; \
 		if [ -f "$$BACK_PDF" ]; then \
 			qpdf --empty --pages book/book.pdf "$$BACK_PDF" -- "dist/$${TITLE}_電子版_カラー_B5.pdf" && echo "$${TITLE}_電子版_カラー_B5.pdf OK"; \
