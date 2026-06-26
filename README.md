@@ -1,5 +1,7 @@
 # vivliostyle-book-template
 
+[English README](./README.en.md)
+
 Markdownで原稿を書き、VivliostyleでPDFに変換する同人誌制作テンプレート。
 
 ## 必要なもの
